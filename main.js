@@ -23,6 +23,11 @@ canvas.width = 256;
 canvas.height = 256;
 const ctx = canvas.getContext('2d');
 
+let placementMode = false;
+const tempObstacles = [];
+//setup for temporary obstacles
+
+
 // Fill with blue background
 ctx.fillStyle = '#4a90e2';
 ctx.fillRect(0, 0, 256, 256);
@@ -54,11 +59,10 @@ sphere.position.y = 0.5;
 scene.add( sphere );
 
 
-// Position camera to see the plane from above
+//start pos
 camera.position.set(5, 5, 5);
 camera.lookAt(0, 0, 0);
 
-// Camera control variables
 let cameraDistance = 7;
 let cameraAngleH = Math.PI / 4; // Horizontal angle (around Y axis)
 let cameraAngleV = Math.PI / 4; // Vertical angle (elevation)
@@ -68,18 +72,18 @@ let isDragging = false;
 let previousMouseX = 0;
 let previousMouseY = 0;
 
-const moveSpeed = 0.067;
+let moveSpeed = 0.067;
 const keys = {};
 
 var jumpResolved = true;
 var VelocityY = 0;
 var AccelerationY = 0.0098;
-const groundLevel = -999;
+const groundLevel = -999; //this is not an important variable :3
 const sphereRadius = 0.5;
 
 function jump(){
     if (jumpResolved) {
-        VelocityY = 0.2;
+        VelocityY = 0.2; // v_y =  v_i - at
         jumpResolved = false;
     }
 }
@@ -90,7 +94,7 @@ window.addEventListener('keydown', (e) => {
 });
 window.addEventListener('keyup', (e) => { keys[e.key] = false; });
 
-// Mouse event listeners for camera dragging
+// camera drag ~_~
 window.addEventListener('mousedown', (e) => {
     isDragging = true;
     previousMouseX = e.clientX;
@@ -103,14 +107,13 @@ window.addEventListener('mouseup', () => {
 
 window.addEventListener('mousemove', (e) => {
     if (isDragging) {
-        const deltaX = e.clientX - previousMouseX;
+        const deltaX = e.clientX - previousMouseX; // change in x/y 
         const deltaY = e.clientY - previousMouseY;
         
-        // Update camera angles based on mouse movement
         cameraAngleH -= deltaX * 0.005; // Horizontal rotation
         cameraAngleV += deltaY * 0.005; // Vertical rotation
         
-        // Clamp vertical angle to prevent flipping
+        // max angle is abt 180 degrees (looking straight down), min is 0 (looking straight up)
         cameraAngleV = Math.max(0.1, Math.min(Math.PI - 0.1, cameraAngleV));
         
         previousMouseX = e.clientX;
@@ -121,10 +124,10 @@ window.addEventListener('mousemove', (e) => {
 // Mouse wheel for zoom
 window.addEventListener('wheel', (e) => {
     cameraDistance += e.deltaY * 0.01;
-    cameraDistance = Math.max(2, Math.min(20, cameraDistance)); // Clamp distance
+    cameraDistance = Math.max(2, Math.min(20, cameraDistance)); // d in [2,20]
 });
 
-// Store obstacle meshes for reference
+//loop thru obstacles and add to scene, refer to line 13
 const obstacles = [];
 for (let obstacle of obstacleDict) {
     const obstacleGeometry = new THREE.BoxGeometry( obstacle[3], obstacle[4], obstacle[5] );
@@ -138,7 +141,7 @@ for (let obstacle of obstacleDict) {
     });
 }
 
-// Helper function for sphere-box collision detection
+// sphere-box collision detection
 function checkSphereBoxCollision(spherePos, sphereRadius, boxPos, boxHalfExtents) {
     // Find the closest point on the box to the sphere center
     const closestPoint = new THREE.Vector3(
@@ -152,6 +155,7 @@ function checkSphereBoxCollision(spherePos, sphereRadius, boxPos, boxHalfExtents
     
     if (distance < sphereRadius) {
         // Collision detected - calculate push-out vector
+        //the vectors normalize to 0, so it doesnt move `o`
         const pushOut = new THREE.Vector3().subVectors(spherePos, closestPoint);
         if (pushOut.length() > 0) {
             pushOut.normalize().multiplyScalar(sphereRadius - distance);
@@ -193,8 +197,16 @@ dataView.innerHTML = `<p>Use WASD or Arrow keys to move</p>
 <p>Sphere Position: ${sphere.position.x.toFixed(2)}, ${sphere.position.y > 0.01 || sphere.position.y < -0.01 ? sphere.position.y.toFixed(2) : "0.00"}, ${sphere.position.z.toFixed(2)}</p>`;
 document.body.appendChild(dataView);
 
+//this is wordy but wtv. i will probably remove this once finished. 
+
+let lastFrameTime = 0; //adjust for lag
+let moveSpeedAdjusted = moveSpeed;
 //y has different bc of the constant change due to the force applied by gravity
 function animate() {
+    moveSpeedAdjusted = moveSpeed * ((performance.now() - lastFrameTime) / 16.67);  //calc for calculating lag
+    //calc is slang for calculation
+    //if your new to my stream 
+    lastFrameTime = performance.now();
     dataView.innerHTML = `<p>Use WASD or Arrow keys to move</p>
 <p>Space to jump</p>
 <p>Drag mouse to rotate camera</p>
@@ -228,7 +240,7 @@ function animate() {
     VelocityY -= AccelerationY;
     sphere.position.y += VelocityY;
     
-    // Check collisions with all obstacles
+    // i really need to improve this, maybe filter to not go through every object and only do near objects
     for (let obstacle of obstacles) {
         const pushOut = checkSphereBoxCollision(
             sphere.position, 
@@ -256,7 +268,7 @@ function animate() {
         jumpResolved = true;
     }
     
-    // Update camera position based on angles and distance
+    // trig 
     const cameraOffset = new THREE.Vector3(
         cameraDistance * Math.sin(cameraAngleV) * Math.sin(cameraAngleH),
         cameraDistance * Math.cos(cameraAngleV),
