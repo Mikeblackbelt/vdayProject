@@ -5,7 +5,8 @@ import * as COLOR from './colors.js';
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xffb3d9); // Pink background
 
-const renderer = new THREE.WebGLRenderer();
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limit pixel ratio for performance
 const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
 const loader = new GLTFLoader();
 
@@ -51,8 +52,8 @@ ctx.stroke();
 // Create texture from canvas
 const texture = new THREE.CanvasTexture(canvas);
 
-// Create the sphere with face texture
-const geometry = new THREE.SphereGeometry( 0.5, 32, 32 ); // radius 0.5, 32 segments
+// Create the sphere with face texture - reduce segments for better performance
+const geometry = new THREE.SphereGeometry( 0.5, 16, 16 ); // Reduced from 32,32 to 16,16
 const material = new THREE.MeshBasicMaterial({ map: texture });
 const sphere = new THREE.Mesh( geometry, material );
 sphere.position.y = 0.5;
@@ -143,6 +144,11 @@ for (let obstacle of obstacleDict) {
 
 // sphere-box collision detection
 function checkSphereBoxCollision(spherePos, sphereRadius, boxPos, boxHalfExtents) {
+    // Quick distance check before detailed collision
+    const roughDistance = Math.abs(spherePos.x - boxPos.x) + Math.abs(spherePos.y - boxPos.y) + Math.abs(spherePos.z - boxPos.z);
+    const maxPossibleDistance = sphereRadius + boxHalfExtents.x + boxHalfExtents.y + boxHalfExtents.z;
+    if (roughDistance > maxPossibleDistance) return null;
+    
     // Find the closest point on the box to the sphere center
     const closestPoint = new THREE.Vector3(
         Math.max(boxPos.x - boxHalfExtents.x, Math.min(spherePos.x, boxPos.x + boxHalfExtents.x)),
@@ -199,49 +205,97 @@ document.body.appendChild(dataView);
 
 //this is wordy but wtv. i will probably remove this once finished. 
 
-let lastFrameTime = 0; //adjust for lag
+let lastFrameTime = performance.now();
+let frameCount = 0;
 let moveSpeedAdjusted = moveSpeed;
-//y has different bc of the constant change due to the force applied by gravity
-function animate() {
-    moveSpeedAdjusted = moveSpeed * ((performance.now() - lastFrameTime) / 16.67);  //calc for calculating lag
-    //calc is slang for calculation
-    //if your new to my stream 
-    lastFrameTime = performance.now();
+
+// Reusable vectors to avoid creating new objects every frame
+const tempVec = new THREE.Vector3();
+const cameraOffset = new THREE.Vector3();
+const desiredCameraPos = new THREE.Vector3();
+
+// Cache trigonometric values
+let cachedSinH = Math.sin(cameraAngleH);
+let cachedCosH = Math.cos(cameraAngleH);
+let cachedSinV = Math.sin(cameraAngleV);
+let cachedCosV = Math.cos(cameraAngleV);
+let lastCameraAngleH = cameraAngleH;
+let lastCameraAngleV = cameraAngleV;
+
+// Update dataView less frequently (every 10 frames)
+function updateDataView() {
     dataView.innerHTML = `<p>Use WASD or Arrow keys to move</p>
 <p>Space to jump</p>
 <p>Drag mouse to rotate camera</p>
 <p>Scroll to zoom.</p>
 <p>Sphere Position: ${sphere.position.x.toFixed(2)}, ${sphere.position.y > 0.01 || sphere.position.y < -0.01 ? sphere.position.y.toFixed(2) : "0.00"}, ${sphere.position.z.toFixed(2)}</p>`;
+}
+
+//y has different bc of the constant change due to the force applied by gravity
+function animate() {
+    const currentTime = performance.now();
+    const deltaTime = currentTime - lastFrameTime;
+    moveSpeedAdjusted = moveSpeed * (deltaTime / 16.67);  //calc for calculating lag
+    lastFrameTime = currentTime;
+    
+    // Update dataView only every 10 frames
+    frameCount++;
+    if (frameCount % 10 === 0) {
+        updateDataView();
+    }
+    
+    // Update cached trig values only if angles changed
+    if (lastCameraAngleH !== cameraAngleH) {
+        cachedSinH = Math.sin(cameraAngleH);
+        cachedCosH = Math.cos(cameraAngleH);
+        lastCameraAngleH = cameraAngleH;
+    }
+    if (lastCameraAngleV !== cameraAngleV) {
+        cachedSinV = Math.sin(cameraAngleV);
+        cachedCosV = Math.cos(cameraAngleV);
+        lastCameraAngleV = cameraAngleV;
+    }
+    
     if (keys['ArrowUp'] || keys['w']) {
-        sphere.position.z += -moveSpeed * Math.cos(cameraAngleH);
-        sphere.position.x += -moveSpeed * Math.sin(cameraAngleH);
-        sphere.rotateOnAxis(new THREE.Vector3(1, 0, 0), -2*moveSpeed);
+        sphere.position.z += -moveSpeed * cachedCosH;
+        sphere.position.x += -moveSpeed * cachedSinH;
+        sphere.rotateOnAxis(tempVec.set(1, 0, 0), -2*moveSpeed);
     }
     if (keys['ArrowDown'] || keys['s']) {
-        sphere.position.z -= -moveSpeed * Math.cos(cameraAngleH);
-        sphere.position.x -= -moveSpeed * Math.sin(cameraAngleH);
-        sphere.rotateOnAxis(new THREE.Vector3(1, 0, 0), 2*moveSpeed);
+        sphere.position.z -= -moveSpeed * cachedCosH;
+        sphere.position.x -= -moveSpeed * cachedSinH;
+        sphere.rotateOnAxis(tempVec.set(1, 0, 0), 2*moveSpeed);
     }
 
     if (keys['ArrowLeft'] || keys['a']) {
-        sphere.position.x += -moveSpeed * Math.cos(cameraAngleH);
-        sphere.position.z -= -moveSpeed * Math.sin(cameraAngleH);    
-        sphere.rotateOnAxis(new THREE.Vector3(0, 0, 1), 2*moveSpeed);
+        sphere.position.x += -moveSpeed * cachedCosH;
+        sphere.position.z -= -moveSpeed * cachedSinH;    
+        sphere.rotateOnAxis(tempVec.set(0, 0, 1), 2*moveSpeed);
     }
     if (keys['ArrowRight'] || keys['d']) {
-        sphere.position.x -= -moveSpeed * Math.cos(cameraAngleH);
-        sphere.position.z += -moveSpeed * Math.sin(cameraAngleH);
-        sphere.rotateOnAxis(new THREE.Vector3(0, 0, 1), -2*moveSpeed);
+        sphere.position.x -= -moveSpeed * cachedCosH;
+        sphere.position.z += -moveSpeed * cachedSinH;
+        sphere.rotateOnAxis(tempVec.set(0, 0, 1), -2*moveSpeed);
     }
 
     let yRotation = VelocityY * 0.4;
-    sphere.rotateOnAxis(new THREE.Vector3(0, 0, 1), yRotation);
+    sphere.rotateOnAxis(tempVec.set(0, 0, 1), yRotation);
 
     VelocityY -= AccelerationY;
     sphere.position.y += VelocityY;
     
-    // i really need to improve this, maybe filter to not go through every object and only do near objects
+    // Spatial partitioning - only check obstacles within reasonable distance
+    const checkRadius = 5; // Only check obstacles within 5 units
     for (let obstacle of obstacles) {
+        // Quick distance check before expensive collision detection
+        const dx = sphere.position.x - obstacle.mesh.position.x;
+        const dy = sphere.position.y - obstacle.mesh.position.y;
+        const dz = sphere.position.z - obstacle.mesh.position.z;
+        const distSquared = dx*dx + dy*dy + dz*dz;
+        
+        // Skip if too far away
+        if (distSquared > checkRadius * checkRadius) continue;
+        
         const pushOut = checkSphereBoxCollision(
             sphere.position, 
             sphereRadius, 
@@ -268,22 +322,21 @@ function animate() {
         jumpResolved = true;
     }
     
-    // trig 
-    const cameraOffset = new THREE.Vector3(
-        cameraDistance * Math.sin(cameraAngleV) * Math.sin(cameraAngleH),
-        cameraDistance * Math.cos(cameraAngleV),
-        cameraDistance * Math.sin(cameraAngleV) * Math.cos(cameraAngleH)
+    // trig - use cached values
+    cameraOffset.set(
+        cameraDistance * cachedSinV * cachedSinH,
+        cameraDistance * cachedCosV,
+        cameraDistance * cachedSinV * cachedCosH
     );
 
-    if (sphere.position.y <-10) {
+    if (sphere.position.y < -10) {
         sphere.position.set(0, 5, 0);
         VelocityY = 0; 
     }
     
-    const desiredCameraPos = new THREE.Vector3().addVectors(sphere.position, cameraOffset);
+    desiredCameraPos.addVectors(sphere.position, cameraOffset);
     camera.position.copy(desiredCameraPos);
     camera.lookAt(sphere.position);
-    camera.updateMatrixWorld();
 
     renderer.render( scene, camera );
 }
