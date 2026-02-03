@@ -1,0 +1,14 @@
+const pink = 0xff69b4;
+const yellow = 0xffff00;
+const red = 0xff0000;
+const white = 0xffffff;
+const blue = 0x0000ff;
+const green = 0x00ff00;
+const black = 0x000000;
+const orange = 0xffa500;
+const purple = 0x800080;
+const cyan = 0x00ffff;
+const magenta = 0xff00ff;
+const lime = 0x00ff00;
+const teal = 0x008080;
+export { pink, yellow, red, white, blue, green, black, orange, purple, cyan, magenta, lime, teal };

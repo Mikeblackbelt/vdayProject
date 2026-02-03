@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 //import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-
+import * as COLOR from './colors.js'; 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xffb3d9); // Pink background
 
@@ -9,7 +9,11 @@ const renderer = new THREE.WebGLRenderer();
 const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
 const loader = new GLTFLoader();
 
-const obstacleDict = [[0,-1,0,10,1,10, 0xf0f00], [1,0.65,4,0.3,1.3,0.3,0xff0000]];  //in each element should contain a 7d tuple of [x,y,z,sizeX, sizeY, sizeZ, hexColor]
+const obstacleDict = [[0,-1,0,10,1,10, 0xf0f00], [1,0.65,4,0.3,1.3,0.3,COLOR.blue], [-2,0.5,-3,1,1,1,COLOR.red], [3,0.5,-2,1,1,1,COLOR.green]];
+//in each element should contain a 7d tuple of [x,y,z,sizeX, sizeY, sizeZ, hexColor]
+//i gotta mkae this more conveint for myself :/.
+// gonna be a pain in the ass to add obstacles this way. 
+
 renderer.setSize( window.innerWidth, window.innerHeight );
 document.body.appendChild( renderer.domElement );
 
@@ -24,7 +28,7 @@ ctx.fillStyle = '#4a90e2';
 ctx.fillRect(0, 0, 256, 256);
 
 // Draw eyes
-ctx.fillStyle = '#000000';
+ctx.fillStyle = '#ff09daff';
 ctx.beginPath();
 ctx.arc(80, 80, 15, 0, Math.PI * 2);
 ctx.fill();
@@ -64,7 +68,7 @@ let isDragging = false;
 let previousMouseX = 0;
 let previousMouseY = 0;
 
-const moveSpeed = 0.05;
+const moveSpeed = 0.067;
 const keys = {};
 
 var jumpResolved = true;
@@ -174,28 +178,48 @@ function checkSphereBoxCollision(spherePos, sphereRadius, boxPos, boxHalfExtents
     return null;
 }
     
-function animate() {
+const dataView = document.createElement('div'); 
+dataView.style.position = 'absolute';
+dataView.style.top = '10px';
+dataView.style.left = '10px';
+dataView.style.color = 'black';
+dataView.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
+dataView.style.padding = '10px';
+dataView.style.fontFamily = 'Arial, sans-serif';
+dataView.innerHTML = `<p>Use WASD or Arrow keys to move</p>
+<p>Space to jump</p>
+<p>Drag mouse to rotate camera</p>
+<p>Scroll to zoom.</p>
+<p>Sphere Position: ${sphere.position.x.toFixed(2)}, ${sphere.position.y > 0.01 || sphere.position.y < -0.01 ? sphere.position.y.toFixed(2) : "0.00"}, ${sphere.position.z.toFixed(2)}</p>`;
+document.body.appendChild(dataView);
 
+//y has different bc of the constant change due to the force applied by gravity
+function animate() {
+    dataView.innerHTML = `<p>Use WASD or Arrow keys to move</p>
+<p>Space to jump</p>
+<p>Drag mouse to rotate camera</p>
+<p>Scroll to zoom.</p>
+<p>Sphere Position: ${sphere.position.x.toFixed(2)}, ${sphere.position.y > 0.01 || sphere.position.y < -0.01 ? sphere.position.y.toFixed(2) : "0.00"}, ${sphere.position.z.toFixed(2)}</p>`;
     if (keys['ArrowUp'] || keys['w']) {
         sphere.position.z += -moveSpeed * Math.cos(cameraAngleH);
         sphere.position.x += -moveSpeed * Math.sin(cameraAngleH);
-        sphere.rotateOnAxis(new THREE.Vector3(1, 0, 0), -moveSpeed);
+        sphere.rotateOnAxis(new THREE.Vector3(1, 0, 0), -2*moveSpeed);
     }
     if (keys['ArrowDown'] || keys['s']) {
         sphere.position.z -= -moveSpeed * Math.cos(cameraAngleH);
         sphere.position.x -= -moveSpeed * Math.sin(cameraAngleH);
-        sphere.rotateOnAxis(new THREE.Vector3(1, 0, 0), moveSpeed);
+        sphere.rotateOnAxis(new THREE.Vector3(1, 0, 0), 2*moveSpeed);
     }
 
     if (keys['ArrowLeft'] || keys['a']) {
         sphere.position.x += -moveSpeed * Math.cos(cameraAngleH);
         sphere.position.z -= -moveSpeed * Math.sin(cameraAngleH);    
-        sphere.rotateOnAxis(new THREE.Vector3(0, 0, 1), moveSpeed);
+        sphere.rotateOnAxis(new THREE.Vector3(0, 0, 1), 2*moveSpeed);
     }
     if (keys['ArrowRight'] || keys['d']) {
         sphere.position.x -= -moveSpeed * Math.cos(cameraAngleH);
         sphere.position.z += -moveSpeed * Math.sin(cameraAngleH);
-        sphere.rotateOnAxis(new THREE.Vector3(0, 0, 1), -moveSpeed);
+        sphere.rotateOnAxis(new THREE.Vector3(0, 0, 1), -2*moveSpeed);
     }
 
     let yRotation = VelocityY * 0.4;
