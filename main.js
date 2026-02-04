@@ -2,6 +2,7 @@ import * as THREE from 'three';
 //import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as COLOR from './colors.js'; 
+import obstacleDict from './obstacleDict.js';
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xffb3d9); // Pink background
 
@@ -10,7 +11,6 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limit pixel rat
 const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
 const loader = new GLTFLoader();
 
-const obstacleDict = [[0,-1,0,10,1,10, 0xf0f00], [1,0.65,4,0.3,1.3,0.3,COLOR.blue], [-2,0.5,-3,1,1,1,COLOR.red], [3,0.5,-2,1,1,1,COLOR.green]];
 //in each element should contain a 7d tuple of [x,y,z,sizeX, sizeY, sizeZ, hexColor]
 //i gotta mkae this more conveint for myself :/.
 // gonna be a pain in the ass to add obstacles this way. 
@@ -73,12 +73,16 @@ let isDragging = false;
 let previousMouseX = 0;
 let previousMouseY = 0;
 
-let moveSpeed = 0.067;
+let moveSpeed = 0.101;
 const keys = {};
 
 var jumpResolved = true;
 var VelocityY = 0;
-var AccelerationY = 0.0098;
+var velocityX = 0;
+var velocityZ = 0;
+var AccelerationY = 0.0098;  //this represents downward acceleration due to gravity
+var AccelerationX = 0.006; //this represents time it takes to accelrate, deaccleration time is greater by a bit so ill multiply by a arbitary constant
+var AccelerationZ = 0.006; //see above ^_^
 const groundLevel = -999; //this is not an important variable :3
 const sphereRadius = 0.5;
 
@@ -160,7 +164,7 @@ function checkSphereBoxCollision(spherePos, sphereRadius, boxPos, boxHalfExtents
     const distance = spherePos.distanceTo(closestPoint);
     
     if (distance < sphereRadius) {
-        // Collision detected - calculate push-out vector
+        // collision detected - calculate push-out vector
         //the vectors normalize to 0, so it doesnt move `o`
         const pushOut = new THREE.Vector3().subVectors(spherePos, closestPoint);
         if (pushOut.length() > 0) {
@@ -209,18 +213,22 @@ let lastFrameTime = performance.now();
 let frameCount = 0;
 let moveSpeedAdjusted = moveSpeed;
 
-// Reusable vectors to avoid creating new objects every frame
+// reusable vectors to avoid creating new objects every frame
+//game wont lag :3
 const tempVec = new THREE.Vector3();
 const cameraOffset = new THREE.Vector3();
 const desiredCameraPos = new THREE.Vector3();
 
-// Cache trigonometric values
+// cache trigonometric values
 let cachedSinH = Math.sin(cameraAngleH);
 let cachedCosH = Math.cos(cameraAngleH);
 let cachedSinV = Math.sin(cameraAngleV);
 let cachedCosV = Math.cos(cameraAngleV);
 let lastCameraAngleH = cameraAngleH;
 let lastCameraAngleV = cameraAngleV;
+
+const spawnArray = [[0,5,0], [24.687225302111102, 3.4553999999999854, -13.528725117139802]]
+let spawn = new THREE.Vector3(...spawnArray[1]); //spawn point,  dynamically change
 
 // Update dataView less frequently (every 10 frames)
 function updateDataView() {
@@ -256,9 +264,9 @@ function animate() {
         let obstaclePos = new THREE.Vector3();
         obstaclePos.copy(camera.position);
         obstaclePos.addScaledVector(camera.getWorldDirection(tempVec), 5);
-        obstaclePos.y = sphere.position.y - 1 * Math.sin(cameraAngleV); //place at player height
-        obstaclePos.x = (sphere.position.x + Math.round((obstaclePos.x - sphere.position.x))) * Math.sin(cameraAngleH);
-        obstaclePos.z = (sphere.position.z + Math.round((obstaclePos.z - sphere.position.z))) * Math.cos(cameraAngleH);
+        obstaclePos.y = sphere.position.y - 1; //place at player height
+        obstaclePos.x = sphere.position.x;
+        obstaclePos.z = sphere.position.z;
         let cubeGeometry = new THREE.BoxGeometry( 1, 1, 1 ); 
         //since this doesnt place permatnely and is simply for reference, the actual scale can be adjusted
         let cubeMaterial = new THREE.MeshBasicMaterial( { color: 0x00ff00, opacity: 0.5, transparent: true } );
@@ -266,7 +274,7 @@ function animate() {
         tempCube.position.copy(obstaclePos);
         scene.add( tempCube );
         tempObstacles.push(tempCube);
-        if (keys['Enter']) {
+        if (keys['Enter'] && frameCount % 10 === 0) {
             //create the obstalce in the scene for the session, after page reload will automatically disappear
             const obstacleGeometry = new THREE.BoxGeometry( 1, 1, 1 );
             const obstacleMaterial = new THREE.MeshBasicMaterial( { color: COLOR.purple} );
@@ -276,8 +284,15 @@ function animate() {
             obstacles.push({
                 mesh: obstacleMesh,
                 halfExtents: new THREE.Vector3(0.5, 0.5, 0.5)
-            });    
+            });
+            obstacleDict.push([obstaclePos.x, obstaclePos.y, obstaclePos.z, 1, 1, 1, COLOR.purple]);
+            console.log('Obstacle placed at', obstaclePos);
+            console.log('Obstacles', obstacleDict);  //this line crashes the game? weird 
+
+    
         }
+    }
+    
     // Update cached trig values only if angles changed
     if (lastCameraAngleH !== cameraAngleH) {
         cachedSinH = Math.sin(cameraAngleH);
@@ -290,27 +305,45 @@ function animate() {
         lastCameraAngleV = cameraAngleV;
     }
     
-    if (keys['ArrowUp'] || keys['w']) {
-        sphere.position.z += -moveSpeed * cachedCosH;
-        sphere.position.x += -moveSpeed * cachedSinH;
-        sphere.rotateOnAxis(tempVec.set(0, 0, 1), -2*moveSpeed);
-    }
+    // backward (w arrowdown)
     if (keys['ArrowDown'] || keys['s']) {
-        sphere.position.z -= -moveSpeed * cachedCosH;
-        sphere.position.x -= -moveSpeed * cachedSinH;
-        sphere.rotateOnAxis(tempVec.set(0, 0, 1), 2*moveSpeed);
+        velocityZ = Math.min(velocityZ + AccelerationZ, moveSpeedAdjusted);
+    } else if (velocityZ > 0) {
+        velocityZ = Math.max(velocityZ - 0.8*AccelerationZ, 0);
     }
 
-    if (keys['ArrowLeft'] || keys['a']) {
-        sphere.position.x += -moveSpeed * cachedCosH;
-        sphere.position.z -= -moveSpeed * cachedSinH;    
-        sphere.rotateOnAxis(tempVec.set(1, 0, 0), 2*moveSpeed);
+    // forward (arrowup w)
+    if (keys['ArrowUp'] || keys['w']) {
+        velocityZ = Math.max(velocityZ - AccelerationZ, -moveSpeedAdjusted);
+    } else if (velocityZ < 0) {
+        velocityZ = Math.min(velocityZ + 0.8*AccelerationZ, 0);
     }
+
+    //these are in reverse order bc the keys were in reverse order and its easier to just swap the conditions 
+
+    // Left movement (A or ArrowLeft)
+    if (keys['ArrowLeft'] || keys['a']) {
+        velocityX = Math.max(velocityX - AccelerationX, -moveSpeedAdjusted);
+    } else if (velocityX < 0) {
+        velocityX = Math.min(velocityX + 0.8*AccelerationX, 0);
+    }
+
+    // Right movement (D or ArrowRight)
     if (keys['ArrowRight'] || keys['d']) {
-        sphere.position.x -= -moveSpeed * cachedCosH;
-        sphere.position.z += -moveSpeed * cachedSinH;
-        sphere.rotateOnAxis(tempVec.set(1, 0, 0), -2*moveSpeed);
-    }  
+        velocityX = Math.min(velocityX + AccelerationX, moveSpeedAdjusted);
+    } else if (velocityX > 0) {
+        velocityX = Math.max(velocityX - 0.8*AccelerationX, 0);
+    }
+
+    if (frameCount % 1 == 0) {
+        sphere.rotateOnAxis(tempVec.set(1, 0, 0), -2.5*velocityX);
+        sphere.rotateOnAxis(tempVec.set(0, 0, 1), -2.5*velocityZ);
+    } 
+    // move the roll outside the key checks to account for accel and deaccel
+    //the above line prevents movement... debug?
+    // Apply velocities to position (transform to world space based on camera angle)
+    sphere.position.z += velocityZ * cachedCosH - velocityX * cachedSinH;
+    sphere.position.x += velocityZ * cachedSinH + velocityX * cachedCosH;
 
     let yRotation = VelocityY * 0.4;
     sphere.rotateOnAxis(tempVec.set(0, 0, 1), yRotation);
@@ -319,7 +352,7 @@ function animate() {
     sphere.position.y += VelocityY;
     
     //  only check obstacles within reasonable distance
-    const checkRadius = 5; // Only check obstacles within 5 units
+    const checkRadius = 8; // Only check obstacles within 5 units
     for (let obstacle of obstacles) {
         // quick distance check before expensive collision detection
         const dx = sphere.position.x - obstacle.mesh.position.x;
@@ -339,7 +372,7 @@ function animate() {
         
         if (pushOut) {
             sphere.position.add(pushOut);
-            console.log('Collision detected, pushing sphere out by', pushOut);
+            //console.log('Collision detected, pushing sphere out by', pushOut);
             
             // If collision is mainly vertical (hittin top or bottom), reset velocity
             if (Math.abs(pushOut.y) > Math.abs(pushOut.x) && Math.abs(pushOut.y) > Math.abs(pushOut.z)) {
@@ -347,7 +380,7 @@ function animate() {
                 if (pushOut.y > 0) {
                     jumpResolved = true; // Can jump again if landed on top
                 }
-            }}
+            }
         }
     }
     
@@ -365,7 +398,7 @@ function animate() {
     );
 
     if (sphere.position.y < -10) {
-        sphere.position.set(0, 5, 0);
+        sphere.position.set(spawn.x, spawn.y, spawn.z);
         VelocityY = 0; 
     }
     
@@ -376,3 +409,4 @@ function animate() {
     renderer.render( scene, camera );
 }
 renderer.setAnimationLoop( animate );
+
