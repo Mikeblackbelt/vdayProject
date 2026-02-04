@@ -24,7 +24,7 @@ canvas.width = 256;
 canvas.height = 256;
 const ctx = canvas.getContext('2d');
 
-let placementMode = false;
+let placementMode = true; //change in prod
 const tempObstacles = [];
 //setup for temporary obstacles
 
@@ -49,10 +49,10 @@ ctx.beginPath();
 ctx.arc(128, 128, 60, 0.2 * Math.PI, 0.8 * Math.PI);
 ctx.stroke();
 
-// Create texture from canvas
+//  texture from canvas
 const texture = new THREE.CanvasTexture(canvas);
 
-// Create the sphere with face texture - reduce segments for better performance
+// gameing chafacter- reduce segments for better performance
 const geometry = new THREE.SphereGeometry( 0.5, 16, 16 ); // Reduced from 32,32 to 16,16
 const material = new THREE.MeshBasicMaterial({ map: texture });
 const sphere = new THREE.Mesh( geometry, material );
@@ -65,10 +65,10 @@ camera.position.set(5, 5, 5);
 camera.lookAt(0, 0, 0);
 
 let cameraDistance = 7;
-let cameraAngleH = Math.PI / 4; // Horizontal angle (around Y axis)
-let cameraAngleV = Math.PI / 4; // Vertical angle (elevation)
+let cameraAngleH = Math.PI / 4; // horizontal angle (around Y axis) in radians
+let cameraAngleV = Math.PI / 4; // vertical angle (elevation) in radians
 
-// Mouse drag variables
+// control
 let isDragging = false;
 let previousMouseX = 0;
 let previousMouseY = 0;
@@ -244,6 +244,40 @@ function animate() {
         updateDataView();
     }
     
+    if (placementMode) {
+        //alow obstacle placement by the user.
+        //fix bug where a trillion cubes spawn 
+        renderer.render( scene, camera );
+        if (tempObstacles.length > 0) {
+            for (let tempCube of tempObstacles) {
+                scene.remove(tempCube);
+            }
+        }
+        let obstaclePos = new THREE.Vector3();
+        obstaclePos.copy(camera.position);
+        obstaclePos.addScaledVector(camera.getWorldDirection(tempVec), 5);
+        obstaclePos.y = sphere.position.y - 1 * Math.sin(cameraAngleV); //place at player height
+        obstaclePos.x = (sphere.position.x + Math.round((obstaclePos.x - sphere.position.x))) * Math.sin(cameraAngleH);
+        obstaclePos.z = (sphere.position.z + Math.round((obstaclePos.z - sphere.position.z))) * Math.cos(cameraAngleH);
+        let cubeGeometry = new THREE.BoxGeometry( 1, 1, 1 ); 
+        //since this doesnt place permatnely and is simply for reference, the actual scale can be adjusted
+        let cubeMaterial = new THREE.MeshBasicMaterial( { color: 0x00ff00, opacity: 0.5, transparent: true } );
+        let tempCube = new THREE.Mesh( cubeGeometry, cubeMaterial );
+        tempCube.position.copy(obstaclePos);
+        scene.add( tempCube );
+        tempObstacles.push(tempCube);
+        if (keys['Enter']) {
+            //create the obstalce in the scene for the session, after page reload will automatically disappear
+            const obstacleGeometry = new THREE.BoxGeometry( 1, 1, 1 );
+            const obstacleMaterial = new THREE.MeshBasicMaterial( { color: COLOR.purple} );
+            const obstacleMesh = new THREE.Mesh( obstacleGeometry, obstacleMaterial );
+            obstacleMesh.position.copy(obstaclePos);
+            scene.add( obstacleMesh );
+            obstacles.push({
+                mesh: obstacleMesh,
+                halfExtents: new THREE.Vector3(0.5, 0.5, 0.5)
+            });    
+        }
     // Update cached trig values only if angles changed
     if (lastCameraAngleH !== cameraAngleH) {
         cachedSinH = Math.sin(cameraAngleH);
@@ -259,24 +293,24 @@ function animate() {
     if (keys['ArrowUp'] || keys['w']) {
         sphere.position.z += -moveSpeed * cachedCosH;
         sphere.position.x += -moveSpeed * cachedSinH;
-        sphere.rotateOnAxis(tempVec.set(1, 0, 0), -2*moveSpeed);
+        sphere.rotateOnAxis(tempVec.set(0, 0, 1), -2*moveSpeed);
     }
     if (keys['ArrowDown'] || keys['s']) {
         sphere.position.z -= -moveSpeed * cachedCosH;
         sphere.position.x -= -moveSpeed * cachedSinH;
-        sphere.rotateOnAxis(tempVec.set(1, 0, 0), 2*moveSpeed);
+        sphere.rotateOnAxis(tempVec.set(0, 0, 1), 2*moveSpeed);
     }
 
     if (keys['ArrowLeft'] || keys['a']) {
         sphere.position.x += -moveSpeed * cachedCosH;
         sphere.position.z -= -moveSpeed * cachedSinH;    
-        sphere.rotateOnAxis(tempVec.set(0, 0, 1), 2*moveSpeed);
+        sphere.rotateOnAxis(tempVec.set(1, 0, 0), 2*moveSpeed);
     }
     if (keys['ArrowRight'] || keys['d']) {
         sphere.position.x -= -moveSpeed * cachedCosH;
         sphere.position.z += -moveSpeed * cachedSinH;
-        sphere.rotateOnAxis(tempVec.set(0, 0, 1), -2*moveSpeed);
-    }
+        sphere.rotateOnAxis(tempVec.set(1, 0, 0), -2*moveSpeed);
+    }  
 
     let yRotation = VelocityY * 0.4;
     sphere.rotateOnAxis(tempVec.set(0, 0, 1), yRotation);
@@ -284,10 +318,10 @@ function animate() {
     VelocityY -= AccelerationY;
     sphere.position.y += VelocityY;
     
-    // Spatial partitioning - only check obstacles within reasonable distance
+    //  only check obstacles within reasonable distance
     const checkRadius = 5; // Only check obstacles within 5 units
     for (let obstacle of obstacles) {
-        // Quick distance check before expensive collision detection
+        // quick distance check before expensive collision detection
         const dx = sphere.position.x - obstacle.mesh.position.x;
         const dy = sphere.position.y - obstacle.mesh.position.y;
         const dz = sphere.position.z - obstacle.mesh.position.z;
@@ -305,6 +339,7 @@ function animate() {
         
         if (pushOut) {
             sphere.position.add(pushOut);
+            console.log('Collision detected, pushing sphere out by', pushOut);
             
             // If collision is mainly vertical (hittin top or bottom), reset velocity
             if (Math.abs(pushOut.y) > Math.abs(pushOut.x) && Math.abs(pushOut.y) > Math.abs(pushOut.z)) {
@@ -312,7 +347,7 @@ function animate() {
                 if (pushOut.y > 0) {
                     jumpResolved = true; // Can jump again if landed on top
                 }
-            }
+            }}
         }
     }
     
