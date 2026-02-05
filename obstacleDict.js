@@ -1,6 +1,6 @@
 import * as COLOR from '/colors.js' 
 let obstacleDict = [
-    [0, -1, 0, 10, 1, 10, 986880],
+  [0, -1, 0, 10, 1, 10, 986880],
   [1, 0.65, 4, 0.3, 1.3, 0.3, 255],
   [-2, 0.5, -3, 1, 1, 1, 16711680],
   [3, 0.5, -2, 1, 1, 1, 65280],
@@ -20,6 +20,35 @@ let obstacleDict = [
   [25.231753787474133, 1.0273652861226035, -5.4093640634279225, 1, 1, 1, COLOR.lime],
   [25.44892754272679, 1.1833652861226018, -2.186690293018705, 1, 1, 1, COLOR.orange],
   [25.677540250678014, 2.406707232525009, 1.2218667159335017, 0.2, 1, 6, COLOR.magenta],
-  [21.67, 4.5, 4.1, 6, 1, 0.2, COLOR.cyan]
-];
-export default obstacleDict;
+  [21.67, 4.5, 4.1, 6, 1, 0.2, COLOR.cyan],
+  [18.22,7.5,7.6,6,1,0.2,COLOR.yellow],
+  [19.5, 6.5, 4.07, 1, 1, 1, COLOR.red],
+  [19.5, 8.8, 4.07, 1, 0.2, 1, COLOR.red],
+  [15,8,10,2,0.2,2,COLOR.white] 
+];  //obstacles are a 7d tuple: x,y,z, xsize ysize zsize, color. you can interact with them
+
+
+let spawnDict = [
+    [0, 5,0,5,5,5],
+    [15,8,10,2,2,2]
+] //spawns are a 6d tuple: x,y,z, xsize ysize zsize. they are invisible but if u touch them you respawn there
+
+function checkSpawnCollision(sphereCenter, spawn) {
+    if (Math.abs(sphereCenter.x - spawn[0]) <= (spawn[3] / 2) &&
+        Math.abs(sphereCenter.y - spawn[1]) <= (spawn[4] / 2) &&
+        Math.abs(sphereCenter.z - spawn[2]) <= (spawn[5] / 2)) {
+        return true;
+    }
+    return false;
+}
+
+function checkAllSpawnCollisions(sphereCenter) {
+    for (let i = 0; i < spawnDict.length; i++) {
+        if (checkSpawnCollision(sphereCenter, spawnDict[i])) {
+            return i; // return the index of the spawn point collided with
+        }
+    }
+    return 0; // no collision
+}
+
+export {spawnDict, obstacleDict, checkSpawnCollision, checkAllSpawnCollisions};

@@ -2,7 +2,10 @@ import * as THREE from 'three';
 //import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as COLOR from './colors.js'; 
-import obstacleDict from './obstacleDict.js';
+import {obstacleDict,  spawnDict, checkSpawnCollision, checkAllSpawnCollisions} from './obstacleDict.js'; 
+import { FontLoader} from 'three/examples/jsm/loaders/FontLoader.js';
+import { pass } from 'three/tsl';
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xffb3d9); // Pink background
 
@@ -11,9 +14,43 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limit pixel rat
 const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
 const loader = new GLTFLoader();
 
-//in each element should contain a 7d tuple of [x,y,z,sizeX, sizeY, sizeZ, hexColor]
-//i gotta mkae this more conveint for myself :/.
-// gonna be a pain in the ass to add obstacles this way. 
+loader.load('models/tulip 3.glb', (gltf) => {
+    const flower = gltf.scene;
+
+    flower.scale.set(1, 1, 1);
+    flower.position.set(2, 0, -3);
+
+    flower.traverse(obj => {
+        if (obj.isMesh) {
+            obj.castShadow = true;
+            obj.receiveShadow = true;
+            obj.material.roughness = 0.1;
+            obj.material.metalness = 0.1;
+                
+            const oldMap = obj.material.map; // keep texture if it exists
+
+            obj.material = new THREE.MeshStandardMaterial({
+                map: oldMap || null,
+                color: oldMap ? 0xffffff : obj.material.color,
+                roughness: 0.3,
+                metalness: 0.1
+            });
+
+            obj.material.emissive = new THREE.Color(0x222222);
+            obj.material.em
+        }
+    });
+
+    scene.add(flower);
+});
+
+function detectModelCollision(sphereCenter) {
+    // Placeholder function - implement model-specific collision detection here
+}
+//these comments refer to obstacleDict, which has been moved to the file of the same name:
+//  in each element should contain a 7d tuple of [x,y,z,sizeX, sizeY, sizeZ, hexColor]
+//  i gotta mkae this more conveint for myself :/.
+//  gonna be a pain in the ass to add obstacles this way. 
 
 renderer.setSize( window.innerWidth, window.innerHeight );
 document.body.appendChild( renderer.domElement );
@@ -136,7 +173,7 @@ window.addEventListener('wheel', (e) => {
 const obstacles = [];
 for (let obstacle of obstacleDict) {
     const obstacleGeometry = new THREE.BoxGeometry( obstacle[3], obstacle[4], obstacle[5] );
-    const obstacleMaterial = new THREE.MeshBasicMaterial( { color: obstacle[6]} );
+    const obstacleMaterial = new THREE.MeshLambertMaterial( { emissive: obstacle[6] } );
     const obstacleMesh = new THREE.Mesh( obstacleGeometry, obstacleMaterial );
     obstacleMesh.position.set(obstacle[0], obstacle[1], obstacle[2]);
     scene.add( obstacleMesh );
@@ -227,8 +264,7 @@ let cachedCosV = Math.cos(cameraAngleV);
 let lastCameraAngleH = cameraAngleH;
 let lastCameraAngleV = cameraAngleV;
 
-const spawnArray = [[0,5,0], [24.687225302111102, 3.4553999999999854, -13.528725117139802]]
-let spawn = new THREE.Vector3(...spawnArray[1]); //spawn point,  dynamically change
+let spawn = new THREE.Vector3(0,0,0); //spawn point,  dynamically change
 
 // Update dataView less frequently (every 10 frames)
 function updateDataView() {
@@ -238,6 +274,45 @@ function updateDataView() {
 <p>Scroll to zoom.</p>
 <p>Sphere Position: ${sphere.position.x.toFixed(2)}, ${sphere.position.y > 0.01 || sphere.position.y < -0.01 ? sphere.position.y.toFixed(2) : "0.00"}, ${sphere.position.z.toFixed(2)}</p>`;
 }
+
+const hemiLight = new THREE.HemisphereLight(0xffeeb1, 0x080820, 0.9);
+scene.add(hemiLight);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+dirLight.position.set(5, 10, 7);
+dirLight.castShadow = true;
+scene.add(dirLight);
+
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const groundGeo = new THREE.PlaneGeometry(200, 200);
+const groundMat = new THREE.MeshStandardMaterial({ color: 0xff4f44 });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+ground.position.y = -15;
+scene.add(ground);
+
+const shadowTex = new THREE.TextureLoader().load('shadow.png');
+const shadowMat = new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true });
+const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1.2,1.2), shadowMat);
+shadow.rotation.x = -Math.PI/2;
+scene.add(shadow);
+
+const uiScene = new THREE.Scene();
+const uiCamera = new THREE.OrthographicCamera(
+    -window.innerWidth / 2,
+     window.innerWidth / 2,
+     window.innerHeight / 2,
+    -window.innerHeight / 2,
+    0,
+    10
+);
+uiCamera.position.z = 5;
+
+
+scene.fog = new THREE.FogExp2(0xffb3d9, 0.045);
 
 //y has different bc of the constant change due to the force applied by gravity
 function animate() {
@@ -305,7 +380,7 @@ function animate() {
         lastCameraAngleV = cameraAngleV;
     }
     
-    // backward (w arrowdown)
+    // backward (s arrowdown)
     if (keys['ArrowDown'] || keys['s']) {
         velocityZ = Math.min(velocityZ + AccelerationZ, moveSpeedAdjusted);
     } else if (velocityZ > 0) {
@@ -348,8 +423,8 @@ function animate() {
     let yRotation = VelocityY * 0.4;
     sphere.rotateOnAxis(tempVec.set(0, 0, 1), yRotation);
 
-    VelocityY -= AccelerationY;
-    sphere.position.y += VelocityY;
+    sphere.position.y += VelocityY ;
+    VelocityY -= AccelerationY * deltaTime/16.67; // apply gravity
     
     //  only check obstacles within reasonable distance
     const checkRadius = 8; // Only check obstacles within 5 units
@@ -406,7 +481,46 @@ function animate() {
     camera.position.copy(desiredCameraPos);
     camera.lookAt(sphere.position);
 
-    renderer.render( scene, camera );
+    let spawnIndex = checkAllSpawnCollisions(sphere.position);
+    if (spawnIndex !== 0) {
+        let spawnPoint = new THREE.Vector3(...spawnDict[spawnIndex]).addScaledVector(new THREE.Vector3(0,3,0), sphereRadius + 0.1);
+        spawn.set(spawnPoint.x, spawnPoint.y, spawnPoint.z);
+
+        const tLoader = new THREE.TextureLoader();
+        const respawnTex = tLoader.load('image/logo - Spawn Point Set.png');
+
+        const respawnMat = new THREE.SpriteMaterial({
+            map: respawnTex,
+            transparent: true
+        });
+
+        const respawnSprite = new THREE.Sprite(respawnMat);
+
+        // Position relative to screen
+        respawnSprite.position.set(0, window.innerHeight/2 - 100, 0);
+        respawnSprite.scale.set(200, 200, 1); // pixels now
+        uiScene.add(respawnSprite);
+    }
+
+    try {
+        if (respawnSprite) {
+            if (spawnIndex === 0) {
+                uiScene.remove(respawnSprite);
+                respawnSprite = null;
+            }
+        }
+    }
+    catch (e) {
+        "do nothing";
+    }
+
+    renderer.autoClear = false;
+    renderer.clear();
+    renderer.render(scene, camera);     // 3D world
+    renderer.render(uiScene, uiCamera); // UI on top
+
 }
 renderer.setAnimationLoop( animate );
+
+
 
