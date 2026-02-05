@@ -153,7 +153,7 @@ window.addEventListener('mousemove', (e) => {
         const deltaY = e.clientY - previousMouseY;
         
         cameraAngleH -= deltaX * 0.005; // Horizontal rotation
-        cameraAngleV += deltaY * 0.005; // Vertical rotation
+        cameraAngleV -= deltaY * 0.005; // Vertical rotation
         
         // max angle is abt 180 degrees (looking straight down), min is 0 (looking straight up)
         cameraAngleV = Math.max(0.1, Math.min(Math.PI - 0.1, cameraAngleV));
@@ -311,9 +311,17 @@ const uiCamera = new THREE.OrthographicCamera(
 );
 uiCamera.position.z = 5;
 
+const respawnSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: new THREE.TextureLoader().load('image/logo - Spawn Point Set.png'),
+    transparent: true
+}));
+respawnSprite.position.set(0, window.innerHeight/2 - 100, 0);
+respawnSprite.scale.set(200, 200, 1); // pixels now
+uiScene.add(respawnSprite);
 
 scene.fog = new THREE.FogExp2(0xffb3d9, 0.045);
 
+let lastSpawnSet = 0;
 //y has different bc of the constant change due to the force applied by gravity
 function animate() {
     const currentTime = performance.now();
@@ -482,36 +490,23 @@ function animate() {
     camera.lookAt(sphere.position);
 
     let spawnIndex = checkAllSpawnCollisions(sphere.position);
-    if (spawnIndex !== 0) {
+    if (spawnIndex !== 0 && lastSpawnSet != spawnIndex) {
         let spawnPoint = new THREE.Vector3(...spawnDict[spawnIndex]).addScaledVector(new THREE.Vector3(0,3,0), sphereRadius + 0.1);
         spawn.set(spawnPoint.x, spawnPoint.y, spawnPoint.z);
-
-        const tLoader = new THREE.TextureLoader();
-        const respawnTex = tLoader.load('image/logo - Spawn Point Set.png');
-
-        const respawnMat = new THREE.SpriteMaterial({
-            map: respawnTex,
-            transparent: true
-        });
-
-        const respawnSprite = new THREE.Sprite(respawnMat);
-
-        // Position relative to screen
-        respawnSprite.position.set(0, window.innerHeight/2 - 100, 0);
-        respawnSprite.scale.set(200, 200, 1); // pixels now
-        uiScene.add(respawnSprite);
-    }
-
-    try {
-        if (respawnSprite) {
-            if (spawnIndex === 0) {
-                uiScene.remove(respawnSprite);
-                respawnSprite = null;
+        lastSpawnSet = spawnIndex;
+        console.log('Spawn point set to:', spawn);
+        respawnSprite.material.opacity = 1; 
+        setInterval(() => {
+            respawnSprite.material.opacity -= 0.01;
+            if (respawnSprite.material.opacity <= 0) {
+                console.log(' i should clear the interval :3');
+                clearInterval();
             }
-        }
+        }, 20);
     }
-    catch (e) {
-        "do nothing";
+    else {
+        //console.log('no spawn collision');
+      
     }
 
     renderer.autoClear = false;
