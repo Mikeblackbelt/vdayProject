@@ -264,6 +264,10 @@ let cachedCosV = Math.cos(cameraAngleV);
 let lastCameraAngleH = cameraAngleH;
 let lastCameraAngleV = cameraAngleV;
 
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
+
 let spawn = new THREE.Vector3(0,0,0); //spawn point,  dynamically change
 
 // Update dataView less frequently (every 10 frames)
@@ -277,6 +281,7 @@ function updateDataView() {
 
 const hemiLight = new THREE.HemisphereLight(0xffeeb1, 0x080820, 0.9);
 scene.add(hemiLight);
+//hemiLight.intensity = 0
 
 const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
 dirLight.position.set(5, 10, 7);

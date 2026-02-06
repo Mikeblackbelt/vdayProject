@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as COLOR from '/colors.js'
+import { objectViewPosition } from 'three/tsl';
 const loader = new GLTFLoader();
 
 export function loadFlower(scene, onLoad) {
@@ -10,36 +11,27 @@ export function loadFlower(scene, onLoad) {
       const flower = gltf.scene;
       flower.scale.set(1, 1, 1);
       flower.position.set(2, 0, -3);
-      let uniqueCheck = {}
       flower.traverse(obj => {
-        if (JSON.stringify(obj.toJSON()) in uniqueCheck) {
-          console.log('duplicate');
-          console.log(uniqueCheck);
-          return
-        }
-        else {
-          
-        }
         if (obj.isMesh) {
-          obj.castShadow = true;
-          obj.receiveShadow = true;
-          if (obj.material.color['r'] > 0.7 ) {
-            obj.material.color['b'] = 0.7
-            obj.material.color['g'] =0.5
-            obj.material.color['r'] = 1
+          if (obj.material.color['r'] > 0.5 ) {
+            if (Math.random() > 0.5) {
+              obj.material.color = new THREE.Color(0xd745dfff)
+            }
+            else {
+              obj.material.color = new THREE.Color(0xff640aff )
+            }
             console.log('yo')
           } //make red more bright
           const oldMap = obj.material.map;
           console.log(obj.material.color)
           
-          obj.material = new THREE.MeshStandardMaterial({
+          obj.material = new THREE.MeshLambertMaterial({
             map: oldMap || null,
             color: oldMap ? 0xffffff : obj.material.color,
             roughness: 0.1,
             metalness: 0,
-            emissive: new THREE.Color(obj.emissive * 1.2)
           });
-          uniqueCheck[JSON.stringify(obj.toJSON())] = '1'
+          obj.material.emissive = 0x00000
         }
         
       });
