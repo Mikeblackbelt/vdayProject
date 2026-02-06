@@ -24,11 +24,28 @@ let obstacleDict = [
   [18.22,7.5,7.6,6,1,0.2,COLOR.yellow],
   [19.5, 6.5, 4.07, 1, 1, 1, COLOR.red],
   [19.5, 8.8, 4.07, 1, 0.2, 1, COLOR.red],
-  [15,8,10,2,0.2,2,COLOR.white] 
+  [15,8,10,2,0.2,2,COLOR.white] ,  [20, 11, 14, 2, 0.4, 2, COLOR.green],
+  [23, 12.5, 16, 2, 0.4, 2, COLOR.orange],
+  [26, 14, 18, 2, 0.4, 2, COLOR.pink],
+  [29, 15, 20, 0.4, 0.4, 6, COLOR.yellow],
+  [32, 16, 23, 6, 0.4, 0.4, COLOR.cyan],
+  [36, 17.5, 25, 1, 0.3, 1, COLOR.red],
+  [38, 18.5, 27, 1, 0.3, 1, COLOR.red],
+  [40, 19.5, 29, 1, 0.3, 1, COLOR.red],
+  [42, 21, 31, 0.5, 4, 0.5, COLOR.white],
+  [45, 21, 33, 0.5, 4, 0.5, COLOR.white],
+  [48, 21, 35, 0.5, 4, 0.5, COLOR.white],
+  [52, 22, 38, 6, 0.6, 6, COLOR.lime],
+  [20,12.5,16,1,0.3,1,COLOR.blue]
 ];  //obstacles are a 7d tuple: x,y,z, xsize ysize zsize, color. you can interact with them
 
 let sphereObstacleDict = [
     [14.5, 9, 12, 0.5, COLOR.orange],
+    [41,16,33,0.5,COLOR.yellow],
+    [25,15,20,0.4,COLOR.purple],
+    [17,10,12,0.6,COLOR.lime],
+    [18.5,9.5,13,0.7, COLOR.blue],
+    [23,16,16,2,COLOR.yellow]
 ]  //sphere obstacles are a 5d tuple, x, y, z, r, color
 //be careful with radius is bigger than it appears
 

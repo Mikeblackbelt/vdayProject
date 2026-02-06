@@ -5,6 +5,7 @@ import * as COLOR from './colors.js';
 import {obstacleDict,  spawnDict, checkSpawnCollision, checkAllSpawnCollisions, sphereObstacleDict} from './obstacleDict.js'; 
 import { FontLoader} from 'three/examples/jsm/loaders/FontLoader.js';
 import { modelDirection, pass } from 'three/tsl';
+import {loadFlower} from '/modelLogic.js'
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xffb3d9); // Pink background
@@ -15,36 +16,12 @@ const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.inner
 const loader = new GLTFLoader();
 
 let modelDict = []
-let flower = null; //make it global
-loader.load('models/tulip 3.glb', (gltf) => {
-    flower = gltf.scene;
-    flower.scale.set(1, 1, 1);
-    flower.position.set(2, 0, -3);
-
-    flower.traverse(obj => {
-        if (obj.isMesh) {
-            obj.castShadow = true;
-            obj.receiveShadow = true;
-            obj.material.roughness = 0.1;
-            obj.material.metalness = 0.1;
-                
-            const oldMap = obj.material.map; // keep texture if it exists
-
-            obj.material = new THREE.MeshStandardMaterial({
-                map: oldMap || null,
-                color: oldMap ? 0xffffff : obj.material.color,
-                roughness: 0.3,
-                metalness: 0.1
-            });
-
-            obj.material.emissive = new THREE.Color(0x222222);
-        }
-    });
+let flower = null;
+loadFlower(scene, (loadedFlower) => {
+    flower = loadedFlower;
     modelDict.push(flower);
-    scene.add(flower);
+    console.warn(modelDict[0]);
 });
-
-
 
 function detectModelCollision(sphereCenter) {
     let intersections = []
@@ -55,10 +32,10 @@ function detectModelCollision(sphereCenter) {
     }
     if (intersections.length == 0) {
         //console.log('nope')
-        return false
+        return false;
     }
     else {
-        return intersections
+        return intersections;
     }
 }
 
