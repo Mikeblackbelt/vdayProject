@@ -27,6 +27,10 @@ let obstacleDict = [
   [15,8,10,2,0.2,2,COLOR.white] 
 ];  //obstacles are a 7d tuple: x,y,z, xsize ysize zsize, color. you can interact with them
 
+let sphereObstacleDict = [
+    [14.5, 9, 12, 0.5, COLOR.orange],
+]  //sphere obstacles are a 5d tuple, x, y, z, r, color
+//be careful with radius is bigger than it appears
 
 let spawnDict = [
     [0, 5,0,5,5,5],
@@ -51,4 +55,14 @@ function checkAllSpawnCollisions(sphereCenter) {
     return 0; // no collision
 }
 
-export {spawnDict, obstacleDict, checkSpawnCollision, checkAllSpawnCollisions};
+export {spawnDict, obstacleDict, checkSpawnCollision, checkAllSpawnCollisions, sphereObstacleDict};
+
+//Use WASD or Arrow keys to move
+
+//Space to jump
+
+//Drag mouse to rotate camera
+
+//Scroll to zoom.
+
+//Sphere Position: 14.45, 8.60, 10.7

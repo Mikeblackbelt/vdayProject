@@ -2,9 +2,9 @@ import * as THREE from 'three';
 //import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as COLOR from './colors.js'; 
-import {obstacleDict,  spawnDict, checkSpawnCollision, checkAllSpawnCollisions} from './obstacleDict.js'; 
+import {obstacleDict,  spawnDict, checkSpawnCollision, checkAllSpawnCollisions, sphereObstacleDict} from './obstacleDict.js'; 
 import { FontLoader} from 'three/examples/jsm/loaders/FontLoader.js';
-import { pass } from 'three/tsl';
+import { modelDirection, pass } from 'three/tsl';
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xffb3d9); // Pink background
@@ -14,9 +14,10 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limit pixel rat
 const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
 const loader = new GLTFLoader();
 
+let modelDict = []
+let flower = null; //make it global
 loader.load('models/tulip 3.glb', (gltf) => {
-    const flower = gltf.scene;
-
+    flower = gltf.scene;
     flower.scale.set(1, 1, 1);
     flower.position.set(2, 0, -3);
 
@@ -37,20 +38,29 @@ loader.load('models/tulip 3.glb', (gltf) => {
             });
 
             obj.material.emissive = new THREE.Color(0x222222);
-            obj.material.em
         }
     });
-
+    modelDict.push(flower);
     scene.add(flower);
 });
 
+
+
 function detectModelCollision(sphereCenter) {
-    // Placeholder function - implement model-specific collision detection here
+    let intersections = []
+    for (let model of modelDict) {
+        if (checkSphereBoxCollision(sphereCenter, 0.5, model.position, new THREE.Vector3(0.5,0.5,0.5))) {
+            intersections.push(model);
+        }
+    }
+    if (intersections.length == 0) {
+        //console.log('nope')
+        return false
+    }
+    else {
+        return intersections
+    }
 }
-//these comments refer to obstacleDict, which has been moved to the file of the same name:
-//  in each element should contain a 7d tuple of [x,y,z,sizeX, sizeY, sizeZ, hexColor]
-//  i gotta mkae this more conveint for myself :/.
-//  gonna be a pain in the ass to add obstacles this way. 
 
 renderer.setSize( window.innerWidth, window.innerHeight );
 document.body.appendChild( renderer.domElement );
@@ -182,6 +192,19 @@ for (let obstacle of obstacleDict) {
         halfExtents: new THREE.Vector3(obstacle[3]/2, obstacle[4]/2, obstacle[5]/2)
     });
 }
+
+for (let obstacle of sphereObstacleDict) {
+    const obstacleGeometry = new THREE.SphereGeometry( obstacle[3], 16, 16);
+    const obstacleMaterial = new THREE.MeshLambertMaterial({emissive: obstacle[4]});
+    const obstacleMesh = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+    obstacleMesh.position.set(obstacle[0],obstacle[1],obstacle[2]);
+    scene.add(obstacleMesh);
+    obstacles.push({
+        mesh: obstacleMesh,
+        halfExtents: new THREE.Vector3(obstacle[3]/2, obstacle[3]/2, obstacle[3]/2)
+    });
+}
+
 
 // sphere-box collision detection
 function checkSphereBoxCollision(spherePos, sphereRadius, boxPos, boxHalfExtents) {
@@ -316,12 +339,15 @@ const respawnSprite = new THREE.Sprite(new THREE.SpriteMaterial({
     transparent: true
 }));
 respawnSprite.position.set(0, window.innerHeight/2 - 100, 0);
-respawnSprite.scale.set(200, 200, 1); // pixels now
+respawnSprite.scale.set(200,100, 1); // pixels now
+respawnSprite.material.opacity = 0;
 uiScene.add(respawnSprite);
 
 scene.fog = new THREE.FogExp2(0xffb3d9, 0.045);
 
 let lastSpawnSet = 0;
+let holdingFlowers = false;
+
 //y has different bc of the constant change due to the force applied by gravity
 function animate() {
     const currentTime = performance.now();
@@ -329,6 +355,10 @@ function animate() {
     moveSpeedAdjusted = moveSpeed * (deltaTime / 16.67);  //calc for calculating lag
     lastFrameTime = currentTime;
     
+    if (detectModelCollision(sphere.position)) {
+        //console.log('yo gurt')
+        holdingFlowers = true;
+    }
     // Update dataView only every 10 frames
     frameCount++;
     if (frameCount % 10 === 0) {
@@ -421,9 +451,8 @@ function animate() {
     if (frameCount % 1 == 0) {
         sphere.rotateOnAxis(tempVec.set(1, 0, 0), -2.5*velocityX);
         sphere.rotateOnAxis(tempVec.set(0, 0, 1), -2.5*velocityZ);
-    } 
+    } //ykw even i dont know... framecount is always an integer `~`
     // move the roll outside the key checks to account for accel and deaccel
-    //the above line prevents movement... debug?
     // Apply velocities to position (transform to world space based on camera angle)
     sphere.position.z += velocityZ * cachedCosH - velocityX * cachedSinH;
     sphere.position.x += velocityZ * cachedSinH + velocityX * cachedCosH;
@@ -461,7 +490,7 @@ function animate() {
             if (Math.abs(pushOut.y) > Math.abs(pushOut.x) && Math.abs(pushOut.y) > Math.abs(pushOut.z)) {
                 VelocityY = 0;
                 if (pushOut.y > 0) {
-                    jumpResolved = true; // Can jump again if landed on top
+                    jumpResolved = true; // can jump again if landed on top
                 }
             }
         }
@@ -499,14 +528,22 @@ function animate() {
         setInterval(() => {
             respawnSprite.material.opacity -= 0.01;
             if (respawnSprite.material.opacity <= 0) {
-                console.log(' i should clear the interval :3');
+                //console.log(' i should clear the interval :3');
                 clearInterval();
             }
         }, 20);
     }
-    else {
-        //console.log('no spawn collision');
-      
+
+    if (holdingFlowers && flower) {  // flower
+        flower.position.set(
+            sphere.position.x + 0.6,
+            sphere.position.y + 0.7, 
+            sphere.position.z - 0.3,
+        );
+        
+        // option 2: use addScaledVector 
+        // flower.position.copy(sphere.position);
+        // flower.position.addScaledVector(new THREE.Vector3(1, 1, 1), 1);
     }
 
     renderer.autoClear = false;
@@ -519,3 +556,5 @@ renderer.setAnimationLoop( animate );
 
 
 
+//535 lines in one file and its not done (tired emoji) 
+//i should move stuff to other files
