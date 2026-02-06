@@ -513,9 +513,9 @@ function animate() {
 
     if (holdingFlowers && flower) {  // flower
         flower.position.set(
-            sphere.position.x + 0.6,
-            sphere.position.y + 0.7, 
-            sphere.position.z - 0.3,
+            sphere.position.x ,
+            sphere.position.y + 1.2, 
+            sphere.position.z ,
         );
         
         // option 2: use addScaledVector 
