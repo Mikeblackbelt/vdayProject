@@ -24,7 +24,8 @@ let obstacleDict = [
   [18.22,7.5,7.6,6,1,0.2,COLOR.yellow],
   [19.5, 6.5, 4.07, 1, 1, 1, COLOR.red],
   [19.5, 8.8, 4.07, 1, 0.2, 1, COLOR.red],
-  [15,8,10,2,0.2,2,COLOR.white] ,  [20, 11, 14, 2, 0.4, 2, COLOR.green],
+  [15,8,10,2,0.2,2,COLOR.white],
+  [20, 11, 14, 2, 0.4, 2, COLOR.green],
   [23, 12.5, 16, 2, 0.4, 2, COLOR.orange],
   [26, 14, 18, 2, 0.4, 2, COLOR.pink],
   [29, 15, 20, 0.4, 0.4, 6, COLOR.yellow],
@@ -36,50 +37,77 @@ let obstacleDict = [
   [45, 21, 33, 0.5, 4, 0.5, COLOR.white],
   [48, 21, 35, 0.5, 4, 0.5, COLOR.white],
   [52, 22, 38, 6, 0.6, 6, COLOR.lime],
-  [20,12.5,16,1,0.3,1,COLOR.blue]
-];  //obstacles are a 7d tuple: x,y,z, xsize ysize zsize, color. you can interact with them
+  [20,12.5,16,1,0.3,1,COLOR.blue],
+  [46.956507702043595, 23.784957543945065, 37.001330513958344, 1, 0.4, 3, 8388736],
+  [46.73205455617557, 22.885898020206707, 43.18779815218897, 1, 1, 1, COLOR.yellow],
+  [42.76338380701757, 23.05212717406751, 42.705393072291805, 1, 1, 1, COLOR.yellow],
+  [39.729786080661654, 24.707377323743177, 42.90613618109992, 1, 1, 1, COLOR.yellow],
+  [36.54071777855387, 23.23624835014772, 43.17075485354503, 1, 1, 1, COLOR.green],
+  [32.611044360906064, 21.55848830198913, 43.496826566162014, 1, 1, 1, COLOR.red],
+  [32.072283071580635, 21.668224354743536, 39.09483185373842, 1, 1, 1, COLOR.lime],
+  [28.64144148991341, 22.885898020206707, 43.18779815218897, 1, 1, 1, COLOR.yellow],
+  [30, 25, 45, 6, 0.6, 6, COLOR.orange],
+  [24, 28, 48, 5, 0.6, 5, COLOR.pink],
+  [18, 31, 50, 5, 0.6, 5, COLOR.cyan],
+  [12, 34, 49, 4, 0.6, 4, COLOR.green],
+  [6, 37, 46, 4, 0.6, 4, COLOR.yellow],
+  [0, 40, 42, 5, 0.6, 5, COLOR.red],
+  [-6, 42, 37, 5.5, 0.6, 4, COLOR.lime],
+  [-12, 46, 30, 4, 0.6, 4, COLOR.orange],
+  [-16, 49, 23, 4, 0.6, 4, COLOR.purple],
+  [-19, 52, 15, 4, 0.6, 4, COLOR.cyan],
+  [-20, 55, 7, 4, 0.6, 4, COLOR.green],
+  [28.24, 26.3, 46.1, 1, 0.3, 1, COLOR.green],
+[21, 29, 49, 1, 1, 1, COLOR.red],
+[13.98, 31.5, 49, 1, 1, 1, COLOR.purple],
+[8.58, 35.7, 50.8, 0.5, 0.5, 0.5, COLOR.lime],
+[4.7, 38, 42.5, 1,0.1,1, COLOR.green],
+[-2, 43, 30, 1, 1, 1, COLOR.yellow],
+[-10,44,33, 1, 1, 1, COLOR.blue]
+] // [x, y, z, xsize, ysize, zsize, color]
 
 let sphereObstacleDict = [
-    [14.5, 9, 12, 0.5, COLOR.orange],
-    [41,16,33,0.5,COLOR.yellow],
-    [25,15,20,0.4,COLOR.purple],
-    [17,10,12,0.6,COLOR.lime],
-    [18.5,9.5,13,0.7, COLOR.blue],
-    [23,16,16,2,COLOR.yellow]
-]  //sphere obstacles are a 5d tuple, x, y, z, r, color
-//be careful with radius is bigger than it appears
+  [14.5, 9, 12, 0.5, COLOR.orange],
+  [41,16,33,0.5,COLOR.yellow],
+  [25,15,20,0.4,COLOR.purple],
+  [17,10,12,0.6,COLOR.lime],
+  [18.5,9.5,13,0.7, COLOR.blue],
+  [23,16,16,2,COLOR.yellow],
+  [41, 21, 31, 0.5, COLOR.cyan],
+  [-15, 47, 28, 1, COLOR.red],
+  [-19, 56, 10, 1.2, COLOR.blue],
+  [-8, 65, -12, 1, COLOR.orange],
+  [10, 78, -5, 1.3, COLOR.purple],
+  [0, 99, 0, 2, COLOR.white]
+] // [x, y, z, r, color]
 
 let spawnDict = [
-    [0, 5,0,5,5,5],
-    [15,8,10,2,2,2]
-] //spawns are a 6d tuple: x,y,z, xsize ysize zsize. they are invisible but if u touch them you respawn there
+  [0, 5,0,5,5,5],
+  [15,8,10,2,2,2],
+  [52,22,38,3,3,3],
+  [-12, 46, 30, 4,4,4],
+  [-18, 58, 0, 4,4,4],
+  [4, 70, -16, 4,4,4],
+  [1, 91, 2, 4,4,4],
+  [0, 100, 0, 5,5,5]
+] // [x, y, z, xsize, ysize, zsize]
 
 function checkSpawnCollision(sphereCenter, spawn) {
-    if (Math.abs(sphereCenter.x - spawn[0]) <= (spawn[3] / 2) &&
-        Math.abs(sphereCenter.y - spawn[1]) <= (spawn[4] / 2) &&
-        Math.abs(sphereCenter.z - spawn[2]) <= (spawn[5] / 2)) {
-        return true;
-    }
-    return false;
+  if (Math.abs(sphereCenter.x - spawn[0]) <= (spawn[3] / 2) &&
+      Math.abs(sphereCenter.y - spawn[1]) <= (spawn[4] / 2) &&
+      Math.abs(sphereCenter.z - spawn[2]) <= (spawn[5] / 2)) {
+      return true;
+  }
+  return false;
 }
 
 function checkAllSpawnCollisions(sphereCenter) {
-    for (let i = 0; i < spawnDict.length; i++) {
-        if (checkSpawnCollision(sphereCenter, spawnDict[i])) {
-            return i; // return the index of the spawn point collided with
-        }
-    }
-    return 0; // no collision
+  for (let i = 0; i < spawnDict.length; i++) {
+      if (checkSpawnCollision(sphereCenter, spawnDict[i])) {
+          return i;
+      }
+  }
+  return 0;
 }
 
 export {spawnDict, obstacleDict, checkSpawnCollision, checkAllSpawnCollisions, sphereObstacleDict};
-
-//Use WASD or Arrow keys to move
-
-//Space to jump
-
-//Drag mouse to rotate camera
-
-//Scroll to zoom.
-
-//Sphere Position: 14.45, 8.60, 10.7

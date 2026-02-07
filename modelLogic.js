@@ -14,11 +14,15 @@ export function loadFlower(scene, onLoad) {
       flower.traverse(obj => {
         if (obj.isMesh) {
           if (obj.material.color['r'] > 0.5 ) {
-            if (Math.random() > 0.5) {
+            let choice = Math.random();
+            if (choice > 0.67) {
               obj.material.color = new THREE.Color(0xd745dfff)
             }
-            else {
+            else if (choice > 0.33) {
               obj.material.color = new THREE.Color(0xff640aff )
+            }
+            else {
+              obj.material.color = new THREE.Color(0x6af8ffff)
             }
             console.log('yo')
           } //make red more bright
@@ -28,10 +32,10 @@ export function loadFlower(scene, onLoad) {
           obj.material = new THREE.MeshLambertMaterial({
             map: oldMap || null,
             color: oldMap ? 0xffffff : obj.material.color,
-            roughness: 0.1,
-            metalness: 0,
+            emissiveIntensity: 0.5,
+            emissive: obj.material.color
           });
-          obj.material.emissive = 0x00000
+          //obj.material.emissive = 0x00000
         }
         
       });
