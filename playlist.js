@@ -1,8 +1,8 @@
 const audioSources = [
-    'music/kalimba-research-notes-cozy-lofi-462748.mp3',
-    'music/late-night-lofi-chill-coffee-study-beats-no-copyright-476705.mp3',
-    'music/subtle-pixel-glow-462740.mp3',
-    'music/Evening-Improvisation-with-Ethera(chosic.com).mp3'
+    'https://github.com/Mikeblackbelt/vdayProject/blob/main/music/kalimba-research-notes-cozy-lofi-462748.mp3',
+    'https://github.com/Mikeblackbelt/vdayProject/blob/main/music/late-night-lofi-chill-coffee-study-beats-no-copyright-476705.mp3',
+    'https://github.com/Mikeblackbelt/vdayProject/blob/main/music/subtle-pixel-glow-462740.mp3',
+    'https://github.com/Mikeblackbelt/vdayProject/blob/main/music/kalimba-research-notes-cozy-lofi-462748.mp3'
 ]
 
 async function playRandomAudio() {
