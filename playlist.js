@@ -23,6 +23,8 @@ export async function startPlaylist() {
     }
 }
 
-startPlaylist()
+document.addEventListener('click', () => {
+    startPlaylist();
+}, { once: true });
 
 //fuck yes it works
