@@ -6,6 +6,10 @@ import {obstacleDict,  spawnDict, checkSpawnCollision, checkAllSpawnCollisions, 
 import { FontLoader} from 'three/examples/jsm/loaders/FontLoader.js';
 import { modelDirection, pass } from 'three/tsl';
 import {loadFlower} from '/modelLogic.js'
+import { io } from "socket.io-client";
+const socket = io("http://localhost:3000");
+const otherPlayers = {};
+let playerHoldingFlower = null;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xffb3d9); // Pink background
@@ -17,21 +21,40 @@ const loader = new GLTFLoader();
 
 let modelDict = []
 let flower = null;
+let flowerLoaded = false;
+
 loadFlower(scene, (loadedFlower) => {
     flower = loadedFlower;
+    flowerLoaded = true;
     modelDict.push(flower);
-    console.warn(modelDict[0]);
+    console.log('Flower loaded successfully:', flower);
+    console.log('Flower position:', flower.position);
+    console.log('Flower in modelDict:', modelDict);
 });
 
 function detectModelCollision(sphereCenter) {
     let intersections = []
+    if (!flowerLoaded || modelDict.length === 0) {
+        return false;
+    }
+    
     for (let model of modelDict) {
-        if (checkSphereBoxCollision(sphereCenter, 0.5, model.position, new THREE.Vector3(0.5,0.5,0.5))) {
+        if (!model || !model.position) {
+            console.warn('Invalid model in modelDict:', model);
+            continue;
+        }
+        
+        // Use a larger collision box for easier pickup
+        const collisionSize = new THREE.Vector3(0.3, 0.3, 0.3); // Increased from 0.5 and then decreased from 1... 
+        const collision = checkSphereBoxCollision(sphereCenter, 0.5, model.position, collisionSize);
+        
+        if (collision) {
             intersections.push(model);
+            console.log('Collision detected with model at:', model.position);
         }
     }
+    
     if (intersections.length == 0) {
-        //console.log('nope')
         return false;
     }
     else {
@@ -83,6 +106,83 @@ const sphere = new THREE.Mesh( geometry, material );
 sphere.position.y = 0.5;
 scene.add( sphere );
 
+
+function createOtherPlayer(id) {
+    const geo = new THREE.SphereGeometry(0.5, 16, 16);
+    const mat = new THREE.MeshBasicMaterial({ color: Math.random() * 0xffffff });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.y = 0.5; // FIX: Set initial Y position
+    scene.add(mesh);
+    otherPlayers[id] = mesh;
+    console.log('Created other player:', id, 'at position:', mesh.position);
+    return mesh;
+}
+
+// Current players
+socket.on("currentPlayers", (players) => {
+    console.log("currentPlayers event received:", players);
+    for (let id in players) {
+        if (id !== socket.id) {
+            const mesh = createOtherPlayer(id);
+            mesh.position.set(players[id].x, players[id].y, players[id].z);
+            console.log('Set existing player position:', id, players[id]);
+        }
+    }
+});
+
+// New player joins
+socket.on("newPlayer", (data) => {
+    console.log("newPlayer event received:", data);
+    if (data.id !== socket.id) { // FIX: Don't create self
+        const mesh = createOtherPlayer(data.id);
+        mesh.position.set(data.x, data.y, data.z);
+    }
+});
+
+// Player movement
+socket.on("playerMoved", (data) => {
+    if (otherPlayers[data.id]) {
+        otherPlayers[data.id].position.set(data.x, data.y, data.z);
+    }
+});
+
+// Player disconnects
+socket.on("playerDisconnected", (id) => {
+    console.log("Player disconnected:", id);
+    if (otherPlayers[id]) {
+        scene.remove(otherPlayers[id]);
+        delete otherPlayers[id];
+    }
+});
+
+
+socket.on("flowerPickedUp", (data) => {
+    console.log('____PICKUP_____');
+    console.log(' ID who picked up:', data.id);
+    console.log('socket ID:', socket.id);
+    console.log('Is it me?', data.id === socket.id);
+    console.log('Other players:', Object.keys(otherPlayers));
+    
+    playerHoldingFlower = data.id;
+    console.log('Set playerHoldingFlower to:', playerHoldingFlower);
+});
+
+socket.on("flowerDropped", () => {
+    console.log('=== FLOWER DROPPED EVENT ===');
+    playerHoldingFlower = null;
+    console.log('Flower dropped/reset');
+});
+
+
+
+function playerCollisionCheck() {
+    for (let id in otherPlayers) {
+        if (checkSphereBoxCollision(sphere.position, 0.5, otherPlayers[id].position, new THREE.Vector3(0.5,0.5,0.5))) {
+            console.log('Collided with player', id);
+            return id;
+        }
+    }
+}
 
 //start pos
 camera.position.set(5, 5, 5);
@@ -276,7 +376,8 @@ function updateDataView() {
 <p>Space to jump</p>
 <p>Drag mouse to rotate camera</p>
 <p>Scroll to zoom.</p>
-<p>Sphere Position: ${sphere.position.x.toFixed(2)}, ${sphere.position.y > 0.01 || sphere.position.y < -0.01 ? sphere.position.y.toFixed(2) : "0.00"}, ${sphere.position.z.toFixed(2)}</p>`;
+<p>Sphere Position: ${sphere.position.x.toFixed(2)}, ${sphere.position.y > 0.01 || sphere.position.y < -0.01 ? sphere.position.y.toFixed(2) : "0.00"}, ${sphere.position.z.toFixed(2)}</p>
+<p>Connected Players: ${Object.keys(otherPlayers).length + 1}</p>`;
 }
 
 const hemiLight = new THREE.HemisphereLight(0xffeeb1, 0x080820, 0.9);
@@ -317,7 +418,7 @@ const uiCamera = new THREE.OrthographicCamera(
 uiCamera.position.z = 5;
 
 const respawnSprite = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: new THREE.TextureLoader().load('image/logo - Spawn Point Set.png'),
+    map: new THREE.TextureLoader().load('https://github.com/Mikeblackbelt/vdayProject/blob/main/image/logo%20-%20Spawn%20Point%20Set.png?raw=true'),
     transparent: true
 }));
 respawnSprite.position.set(0, window.innerHeight/2 - 100, 0);
@@ -333,14 +434,10 @@ let holdingFlowers = false;
 //y has different bc of the constant change due to the force applied by gravity
 function animate() {
     const currentTime = performance.now();
-    const deltaTime = currentTime - lastFrameTime;
+    const deltaTime = Math.max(2 , currentTime - lastFrameTime); //max deltatime bc out of focus
     moveSpeedAdjusted = moveSpeed * (deltaTime / 16.67);  //calc for calculating lag
     lastFrameTime = currentTime;
     
-    if (detectModelCollision(sphere.position)) {
-        //console.log('yo gurt')
-        holdingFlowers = true;
-    }
     // Update dataView only every 10 frames
     frameCount++;
     if (frameCount % 10 === 0) {
@@ -443,10 +540,29 @@ function animate() {
     sphere.rotateOnAxis(tempVec.set(0, 0, 1), yRotation);
 
     sphere.position.y += VelocityY ;
-    VelocityY -= AccelerationY * deltaTime/16.67; // apply gravity
+    VelocityY -= AccelerationY * deltaTime/16.67; // apply gravity in respect to frame rate
+    
+    // fix: send position updates more frequently but throttled
+    if (frameCount % 2 === 0) {
+        socket.emit("updatePosition", {
+            x: sphere.position.x,
+            y: sphere.position.y,
+            z: sphere.position.z
+        });
+    }
+
+    // Check for flower collision only if flower is loaded, also allow stealing
+    if (flowerLoaded && (!playerHoldingFlower || playerHoldingFlower === socket.id)) {
+        const collision = detectModelCollision(sphere.position);
+        if (collision && collision.length > 0) {
+            console.log('Flower picked up!');
+            playerHoldingFlower = socket.id; // set it immediately locally
+            socket.emit("flowerPickedUp", { id: socket.id });
+        }
+    }
     
     //  only check obstacles within reasonable distance
-    const checkRadius = 8; // Only check obstacles within 5 units
+    const checkRadius = 8; //8 unit is reasonable just dont make spheres with r > 8 and cubes with length > 16
     for (let obstacle of obstacles) {
         // quick distance check before expensive collision detection
         const dx = sphere.position.x - obstacle.mesh.position.x;
@@ -516,27 +632,36 @@ function animate() {
         }, 20);
     }
 
-    if (holdingFlowers && flower) {  // flower
-        flower.position.set(
-            sphere.position.x ,
-            sphere.position.y + 1.2, 
-            sphere.position.z ,
-        );
-        
-        // option 2: use addScaledVector 
-        // flower.position.copy(sphere.position);
-        // flower.position.addScaledVector(new THREE.Vector3(1, 1, 1), 1);
+    // Update flower position - FIXED LOGIC
+    if (flowerLoaded && flower) {
+        if (playerHoldingFlower === socket.id) {
+            // Current player is holding the flower
+            flower.position.set(
+                sphere.position.x, 
+                sphere.position.y + 1.2, 
+                sphere.position.z
+            );
+            flower.visible = true;
+        } else if (playerHoldingFlower && otherPlayers[playerHoldingFlower]) {
+            // Another player is holding the flower
+            const otherPlayer = otherPlayers[playerHoldingFlower];
+            flower.position.set(
+                otherPlayer.position.x,
+                otherPlayer.position.y + 1.2,
+                otherPlayer.position.z
+            );
+            flower.visible = true;
+        } else if (!playerHoldingFlower) {
+            // No one is holding the flower - keep it at its spawn location
+            flower.visible = true;
+        }
     }
 
     renderer.autoClear = false;
     renderer.clear();
     renderer.render(scene, camera);     // 3D world
     renderer.render(uiScene, uiCamera); // UI on top
-
 }
+
 renderer.setAnimationLoop( animate );
-
-
-
-//535 lines in one file and its not done (tired emoji) 
-//i should move stuff to other files
+//67
