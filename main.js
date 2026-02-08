@@ -7,7 +7,7 @@ import { FontLoader} from 'three/examples/jsm/loaders/FontLoader.js';
 import { modelDirection, pass } from 'three/tsl';
 import {loadFlower} from '/modelLogic.js'
 import { io } from "socket.io-client";
-const socket = io("http://localhost:3000");
+const socket = io("https://vdayproject2.onrender.com");
 const otherPlayers = {};
 let playerHoldingFlower = null;
 
