@@ -418,7 +418,7 @@ const uiCamera = new THREE.OrthographicCamera(
 uiCamera.position.z = 5;
 
 const respawnSprite = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: new THREE.TextureLoader().load('https://github.com/Mikeblackbelt/vdayProject/blob/main/image/logo%20-%20Spawn%20Point%20Set.png?raw=true'),
+    map: new THREE.TextureLoader().load('https://raw.githubusercontent.com/Mikeblackbelt/vdayProject/main/image/logo%20-%20Spawn%20Point%20Set.png'),
     transparent: true
 }));
 respawnSprite.position.set(0, window.innerHeight/2 - 100, 0);

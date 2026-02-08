@@ -6,7 +6,7 @@ const loader = new GLTFLoader();
 
 export function loadFlower(scene, onLoad) {
   loader.load(
-    'https://github.com/Mikeblackbelt/vdayProject/blob/main/models/tulip%203.glb',
+    'https://raw.githubusercontent.com/Mikeblackbelt/vdayProject/main/models/tulip%203.glb',
     (gltf) => {
       const flower = gltf.scene;
       flower.scale.set(1, 1, 1);
