@@ -27,7 +27,9 @@ export function makeDeco(scene) {
             color: color,
             roughness: 0.6,
             metalness: 0.2,
-            emissive: color
+            emissive: color,
+            opacity: 0.7,
+            transparent: true
         });
 
         mat.emissiveIntensity = 0.5 + Math.random() * 0.5;

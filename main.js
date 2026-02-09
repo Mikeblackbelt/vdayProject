@@ -5,9 +5,10 @@ import * as COLOR from './colors.js';
 import {obstacleDict,  spawnDict, checkSpawnCollision, checkAllSpawnCollisions, sphereObstacleDict} from './obstacleDict.js'; 
 import { FontLoader} from 'three/examples/jsm/loaders/FontLoader.js';
 import { modelDirection, pass } from 'three/tsl';
-import {loadFlower} from '/modelLogic.js'
+import {loadFlower, detectModelCollision, checkSphereBoxCollision} from '/modelLogic.js'
 import { io } from "socket.io-client";
 import { makeDeco } from './abstractShapes.js';
+
 const socket = io("https://vdayproject2.onrender.com");
 const otherPlayers = {};
 let playerHoldingFlower = null;
@@ -33,35 +34,7 @@ loadFlower(scene, (loadedFlower) => {
     console.log('Flower in modelDict:', modelDict);
 });
 
-function detectModelCollision(sphereCenter) {
-    let intersections = []
-    if (!flowerLoaded || modelDict.length === 0) {
-        return false;
-    }
-    
-    for (let model of modelDict) {
-        if (!model || !model.position) {
-            console.warn('Invalid model in modelDict:', model);
-            continue;
-        }
-        
-        // Use a larger collision box for easier pickup
-        const collisionSize = new THREE.Vector3(0.3, 0.3, 0.3); // Increased from 0.5 and then decreased from 1... 
-        const collision = checkSphereBoxCollision(sphereCenter, 0.5, model.position, collisionSize);
-        
-        if (collision) {
-            intersections.push(model);
-            console.log('Collision detected with model at:', model.position);
-        }
-    }
-    
-    if (intersections.length == 0) {
-        return false;
-    }
-    else {
-        return intersections;
-    }
-}
+
 
 renderer.setSize( window.innerWidth, window.innerHeight );
 document.body.appendChild( renderer.domElement );
@@ -321,51 +294,7 @@ for (let obstacle of sphereObstacleDict) {
 
 
 // sphere-box collision detection
-function checkSphereBoxCollision(spherePos, sphereRadius, boxPos, boxHalfExtents) {
-    // Quick distance check before detailed collision
-    const roughDistance = Math.abs(spherePos.x - boxPos.x) + Math.abs(spherePos.y - boxPos.y) + Math.abs(spherePos.z - boxPos.z);
-    const maxPossibleDistance = sphereRadius + boxHalfExtents.x + boxHalfExtents.y + boxHalfExtents.z;
-    if (roughDistance > maxPossibleDistance) return null;
-    
-    // Find the closest point on the box to the sphere center
-    const closestPoint = new THREE.Vector3(
-        Math.max(boxPos.x - boxHalfExtents.x, Math.min(spherePos.x, boxPos.x + boxHalfExtents.x)),
-        Math.max(boxPos.y - boxHalfExtents.y, Math.min(spherePos.y, boxPos.y + boxHalfExtents.y)),
-        Math.max(boxPos.z - boxHalfExtents.z, Math.min(spherePos.z, boxPos.z + boxHalfExtents.z))
-    );
-    
-    // Calculate distance from sphere center to closest point
-    const distance = spherePos.distanceTo(closestPoint);
-    
-    if (distance < sphereRadius) {
-        // collision detected - calculate push-out vector
-        //the vectors normalize to 0, so it doesnt move `o`
-        const pushOut = new THREE.Vector3().subVectors(spherePos, closestPoint);
-        if (pushOut.length() > 0) {
-            pushOut.normalize().multiplyScalar(sphereRadius - distance);
-        } else {
-            // Sphere center is inside box - push out along the nearest axis
-            const dx = Math.min(Math.abs(spherePos.x - (boxPos.x - boxHalfExtents.x)), 
-                               Math.abs(spherePos.x - (boxPos.x + boxHalfExtents.x)));
-            const dy = Math.min(Math.abs(spherePos.y - (boxPos.y - boxHalfExtents.y)), 
-                               Math.abs(spherePos.y - (boxPos.y + boxHalfExtents.y)));
-            const dz = Math.min(Math.abs(spherePos.z - (boxPos.z - boxHalfExtents.z)), 
-                               Math.abs(spherePos.z - (boxPos.z + boxHalfExtents.z)));
-            
-            if (dx < dy && dx < dz) {
-                pushOut.set(spherePos.x < boxPos.x ? -dx : dx, 0, 0);
-            } else if (dy < dz) {
-                pushOut.set(0, spherePos.y < boxPos.y ? -dy : dy, 0);
-            } else {
-                pushOut.set(0, 0, spherePos.z < boxPos.z ? -dz : dz);
-            }
-        }
-        return pushOut;
-    }
-    
-    return null;
-}
-    
+
 const dataView = document.createElement('div'); 
 dataView.style.position = 'absolute';
 dataView.style.top = '10px';
@@ -414,7 +343,8 @@ function updateDataView() {
 <p>Drag mouse to rotate camera</p>
 <p>Scroll to zoom.</p>
 <p>Sphere Position: ${sphere.position.x.toFixed(2)}, ${sphere.position.y > 0.01 || sphere.position.y < -0.01 ? sphere.position.y.toFixed(2) : "0.00"}, ${sphere.position.z.toFixed(2)}</p>
-<p>Connected Players: ${Object.keys(otherPlayers).length + 1}</p>`;
+<p>Connected Players: ${Object.keys(otherPlayers).length + 1}</p>
+<p>Am I Connected to Server? ${socket.connected}</p>`;
 }
 
 const hemiLight = new THREE.HemisphereLight(0xffeeb1, 0x080820, 0.9);
@@ -463,7 +393,7 @@ respawnSprite.scale.set(200,100, 1); // pixels now
 respawnSprite.material.opacity = 0;
 uiScene.add(respawnSprite);
 
-scene.fog = new THREE.FogExp2(0xffb3d9, 0.045);
+scene.fog = new THREE.FogExp2(0xffb3d9, 0.031);
 
 let lastSpawnSet = 0;
 let holdingFlowers = false;
@@ -573,9 +503,9 @@ function animate() {
         velocityX = Math.max(velocityX - 0.8*AccelerationX, 0);
     }
 
-    if (frameCount % 1 == 0) {
-        sphere.rotateOnAxis(tempVec.set(1, 0, 0), -2.5*velocityX);
-        sphere.rotateOnAxis(tempVec.set(0, 0, 1), -2.5*velocityZ);
+    if (frameCount % 2 == 0) {
+        sphere.rotateOnAxis(tempVec.set(1, 0, 0), -5*velocityX);
+        sphere.rotateOnAxis(tempVec.set(0, 0, 1), -5*velocityZ);
     } //ykw even i dont know... framecount is always an integer `~`
     // move the roll outside the key checks to account for accel and deaccel
     // Apply velocities to position (transform to world space based on camera angle)
@@ -599,7 +529,7 @@ function animate() {
 
     // Check for flower collision only if flower is loaded, also allow stealing
     if (flowerLoaded && (!playerHoldingFlower || playerHoldingFlower === socket.id)) {
-        const collision = detectModelCollision(sphere.position);
+        const collision = detectModelCollision(sphere.position, modelDict, flowerLoaded, scene, playerHoldingFlower); // 0.8 is an approximate radius for the flower model
         if (collision && collision.length > 0) {
             console.log('Flower picked up!');
             playerHoldingFlower = socket.id; // set it immediately locally
