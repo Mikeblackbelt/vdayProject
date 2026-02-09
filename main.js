@@ -7,6 +7,7 @@ import { FontLoader} from 'three/examples/jsm/loaders/FontLoader.js';
 import { modelDirection, pass } from 'three/tsl';
 import {loadFlower} from '/modelLogic.js'
 import { io } from "socket.io-client";
+import { makeDeco } from './abstractShapes.js';
 const socket = io("https://vdayproject2.onrender.com");
 const otherPlayers = {};
 let playerHoldingFlower = null;
@@ -106,6 +107,7 @@ const sphere = new THREE.Mesh( geometry, material );
 sphere.position.y = 0.5;
 scene.add( sphere );
 
+makeDeco(scene);
 
 function createOtherPlayer(id) {
     const geo = new THREE.SphereGeometry(0.5, 16, 16);
@@ -255,6 +257,41 @@ window.addEventListener('wheel', (e) => {
     cameraDistance += e.deltaY * 0.01;
     cameraDistance = Math.max(2, Math.min(20, cameraDistance)); // d in [2,20]
 });
+//scene.background = null;
+
+const skyColor = new THREE.Color();
+
+function makeMountain(x, z, height) {
+    const geo = new THREE.ConeGeometry(5, height, 4);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xb57edc, flatShading: true });
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, height/2 - 15, z);
+    scene.add(m);
+}
+
+const mountainPositions = [[-40, -40, 30], [-30, -20, 35], [-30, 10, 35], [-25, -10, -30], [30, -10, -30], [-30, -5, -35]]
+for (let pos of mountainPositions) {
+    makeMountain(pos[0], pos[1], pos[2]);
+}
+
+const bubbleMat = new THREE.MeshPhysicalMaterial({
+    color: 0xffffff,
+    emissive: 0xfbcaff,
+    emissiveIntensity: 0.6,
+    transmission: 1,
+    roughness: 0,
+    thickness: 0.5
+});
+
+const bubblePositions = [];
+
+for (let i = 0; i < 160; i++) {
+    const bubbleGeo = new THREE.SphereGeometry(Math.random() * 0.3 + 0.13, 16, 16);
+    const bubble = new THREE.Mesh(bubbleGeo, bubbleMat);
+    bubble.position.set((Math.random() - 0.5) * 100, Math.random() * 50, (Math.random() - 0.5) * 100);
+    bubblePositions.push(bubble.position);
+    scene.add(bubble);
+} 
 
 //loop thru obstacles and add to scene, refer to line 13
 const obstacles = [];
@@ -438,6 +475,7 @@ function animate() {
     moveSpeedAdjusted = moveSpeed * (deltaTime / 16.67);  //calc for calculating lag
     lastFrameTime = currentTime;
     
+    //updateSky();
     // Update dataView only every 10 frames
     frameCount++;
     if (frameCount % 10 === 0) {
@@ -485,6 +523,14 @@ function animate() {
         }
     }
     
+    if (frameCount % 5 == 1) {
+        bubblePositions.forEach(pos => {
+            pos.y += 0.03;
+            //pos.x += Math.sin(currentTime * 0.001 + pos.z) * 0.0001; // add some horizontal movement
+            //pos.z += Math.cos(currentTime * 0.001 + pos.x) * 0.0001; // add some depth movement
+            pos.y = ((pos.y+ 10) % 50) - 10; // reset to bottom after reaching top
+        });
+    }
     // Update cached trig values only if angles changed
     if (lastCameraAngleH !== cameraAngleH) {
         cachedSinH = Math.sin(cameraAngleH);
@@ -642,6 +688,9 @@ function animate() {
                 sphere.position.z
             );
             flower.visible = true;
+            flower.rotation.y += 0.03;
+            flower.position.y += Math.sin(performance.now() * 0.003) * 0.02;
+
         } else if (playerHoldingFlower && otherPlayers[playerHoldingFlower]) {
             // Another player is holding the flower
             const otherPlayer = otherPlayers[playerHoldingFlower];
@@ -651,6 +700,9 @@ function animate() {
                 otherPlayer.position.z
             );
             flower.visible = true;
+            flower.rotation.y += 0.03;
+            flower.position.y += Math.sin(performance.now() * 0.003) * 0.02;
+
         } else if (!playerHoldingFlower) {
             // No one is holding the flower - keep it at its spawn location
             flower.visible = true;
@@ -664,4 +716,3 @@ function animate() {
 }
 
 renderer.setAnimationLoop( animate );
-//67
