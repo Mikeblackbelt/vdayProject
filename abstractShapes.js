@@ -20,7 +20,7 @@ export function makeDeco(scene) {
         () => new THREE.ConeGeometry(Math.random() * 2.7, 6, 6)
     ];
 
-    for (let i = 0; i < 45; i++) {
+    for (let i = 0; i < 85; i++) {
         const geo = types[Math.floor(Math.random() * types.length)]();
         let color = palette[Math.floor(Math.random() * palette.length)];
         const mat = new THREE.MeshStandardMaterial({
