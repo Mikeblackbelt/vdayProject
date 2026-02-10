@@ -45,7 +45,7 @@ canvas.width = 256;
 canvas.height = 256;
 const ctx = canvas.getContext('2d');
 
-let placementMode = true; //change in prod
+let placementMode = false; //change in prod
 const tempObstacles = [];
 //setup for temporary obstacles
 
