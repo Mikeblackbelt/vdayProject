@@ -93,6 +93,7 @@ function createOtherPlayer(id) {
     return mesh;
 }
 
+console.info('If render is not connected, render might be behind the latest github commit. If you are a developer, try pulling the latest code and restarting the server. If you are a player, inform the developers :3');
 // Current players
 socket.on("currentPlayers", (players) => {
     console.log("currentPlayers event received:", players);
@@ -242,7 +243,7 @@ function makeMountain(x, z, height) {
     scene.add(m);
 }
 
-const mountainPositions = [[-40, -40, 30], [-30, -20, 35], [-30, 10, 35], [-25, -10, -30], [30, -10, -30], [-30, -5, -35]]
+const mountainPositions = [[-40, -40, 30], [-30, -20, 35], [-30, 10, 35], [-30, -5, -35]]
 for (let pos of mountainPositions) {
     makeMountain(pos[0], pos[1], pos[2]);
 }

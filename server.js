@@ -20,26 +20,26 @@ let playerHoldingFlower = null;
 io.on("connection", (socket) => {
     console.log("Player connected:", socket.id);
 
-    // 1️⃣ Add new player immediately
+    // 1️ Add new player immediately
     const newPlayerData = { x: 0, y: 0.5, z: 0 };
     players[socket.id] = newPlayerData;
 
-    // 2️⃣ Send current players to new client
+    // 2️ Send current players to new client
     socket.emit("currentPlayers", players);
 
-    // 3️⃣ Send flower holder if any
+    // 3️ Send flower holder if any
     if (playerHoldingFlower) socket.emit("flowerPickedUp", { id: playerHoldingFlower });
 
-    // 4️⃣ Notify all others about the new player (with position)
+    // 4️ Notify all others about the new player (with position)
     socket.broadcast.emit("newPlayer", { id: socket.id, ...newPlayerData });
 
-    // 5️⃣ Handle position updates
+    // 5️ Handle position updates
     socket.on("updatePosition", (data) => {
         players[socket.id] = data;
         socket.broadcast.emit("playerMoved", { id: socket.id, ...data });
     });
 
-    // 6️⃣ Flower events
+    // 6️.Flower events
     socket.on("flowerPickedUp", (data) => {
         playerHoldingFlower = data.id;
         io.emit("flowerPickedUp", { id: data.id });
@@ -50,7 +50,7 @@ io.on("connection", (socket) => {
         io.emit("flowerDropped");
     });
 
-    // 7️⃣ Disconnect
+    // 7️. Disconnect
     socket.on("disconnect", () => {
         console.log("Player disconnected:", socket.id);
         delete players[socket.id];
