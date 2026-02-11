@@ -188,7 +188,7 @@ const sphereRadius = 0.5;
 
 function jump(){
     if (jumpResolved) {
-        VelocityY = 0.2; // v_y =  v_i - at
+        VelocityY = 0.4; // v_y =  v_i - at
         jumpResolved = false;
     }
 }
@@ -336,7 +336,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
 
 let spawn = new THREE.Vector3(0,0,0); //spawn point,  dynamically change
-
+let finalSpawnIdx = spawnDict.length - 1; //play cutscne after hitting 
 // Update dataView less frequently (every 10 frames)
 function updateDataView() {
     dataView.innerHTML = `<p>Use WASD or Arrow keys to move</p>
@@ -398,9 +398,64 @@ scene.fog = new THREE.FogExp2(0xffb3d9, 0.031);
 
 let lastSpawnSet = 0;
 let holdingFlowers = false;
+let cutScenePlaying = false;
+let cutSceneStartTime = 0;
+let flowerSpawnedCutscene = false;
 
+let sphere2 = null; // Declare sphere2 in a scope accessible to both startCutScene and animate
+
+function startcutScene() {
+    holdingFlowers = true;
+    camera.position.set(0, 104,5);
+    camera.lookAt(0, 100, 0);
+
+    sphere.position.set(-2, 101, 0); // example y=0.5, z=0
+    scene.add(sphere);
+
+    const sphereGeo2 = new THREE.SphereGeometry(0.5, 16, 16);
+    const sphereMat2 = new THREE.MeshLambertMaterial({ color: COLOR.pink });
+    sphere2 = new THREE.Mesh(sphereGeo2, sphereMat2);
+    sphere2.position.set(1, sphere.position.y, sphere.position.z); // same y,z
+    scene.add(sphere2);
+
+    sphere.lookAt(sphere2.position);
+    sphere.rotateOnAxis(new THREE.Vector3(0,1,0),3 * Math.PI / 2); // make them face each other
+    sphere2.lookAt(sphere.position);
+    cutScenePlaying = true;
+    cutSceneStartTime = performance.now();
+
+}
 //y has different bc of the constant change due to the force applied by gravity
 function animate() {
+    if (cutScenePlaying) {
+        let elapsed = performance.now() - cutSceneStartTime;
+        //program cutScene movement
+        if (elapsed < 1000) {
+            console.log('Cutscene part 1, elapsed:', elapsed);
+            //part 1, sphere move toward other sphere
+            let t = elapsed / 1000;
+            sphere.position.x = -2 + 1.5 * t; // move from x=-2 to x=0.5 over 1 second
+
+
+        } else if (elapsed < 2000) {
+            //part 2, pause for a moment. also spawn a flower in the model head of the blue sphere
+            if (elapsed > 1000 && !flowerSpawnedCutscene && playerHoldingFlower !== socket.id) {
+                const flowerGeo = new THREE.SphereGeometry(0.2, 8, 8);
+                const flowerMat = new THREE.MeshBasicMaterial({ color: COLOR.yellow });
+                const flower = new THREE.Mesh(flowerGeo, flowerMat);
+                flower.position.set(sphere2.position.x, sphere2.position.y + 1.2, sphere2.position.z);
+                scene.add(flower);
+                flowerSpawnedCutscene = true;
+            }
+        } else {
+            ///this should load a dialog box and a yes/no button
+        }
+        renderer.autoClear = false;
+        renderer.clear();
+        renderer.render(scene, camera);     // 3D world
+        renderer.render(uiScene, uiCamera); // UI on top
+        return
+    }
     const currentTime = performance.now();
     const deltaTime = Math.max(2 , currentTime - lastFrameTime); //max deltatime bc out of focus
     moveSpeedAdjusted = moveSpeed * (deltaTime / 16.67);  //calc for calculating lag
@@ -607,6 +662,10 @@ function animate() {
                 clearInterval();
             }
         }, 20);
+        if (spawnIndex === finalSpawnIdx) {
+            startcutScene();
+            cutScenePlaying = true;
+        }
     }
 
     // Update flower position - FIXED LOGIC
