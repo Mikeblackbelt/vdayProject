@@ -443,7 +443,7 @@ let postCutSceneState = false;
 
 function jump() {
   if (jumpResolved) {
-    VelocityY = 0.2; // v_y =  v_i - at
+    VelocityY = 0.274; // v_y =  v_i - at
     jumpResolved = false;
   }
 }
