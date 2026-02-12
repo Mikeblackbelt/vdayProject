@@ -443,7 +443,7 @@ let postCutSceneState = false;
 
 function jump() {
   if (jumpResolved) {
-    VelocityY = 0.4; // v_y =  v_i - at
+    VelocityY = 0.2; // v_y =  v_i - at
     jumpResolved = false;
   }
 }
@@ -860,7 +860,7 @@ function animate() {
   sphere.position.z += velocityZ * cachedCosH - velocityX * cachedSinH;
   sphere.position.x += velocityZ * cachedSinH + velocityX * cachedCosH;
 
-  let yRotation = VelocityY * 0.2;
+  let yRotation = VelocityY * 0.4;
   sphere.rotateOnAxis(tempVec.set(0, 0, 1), yRotation);
 
   sphere.position.y += VelocityY;
