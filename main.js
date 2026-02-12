@@ -1,13 +1,23 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 //import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import * as COLOR from './colors.js'; 
-import {obstacleDict,  spawnDict, checkSpawnCollision, checkAllSpawnCollisions, sphereObstacleDict} from './obstacleDict.js'; 
-import { FontLoader} from 'three/examples/jsm/loaders/FontLoader.js';
-import { modelDirection, pass } from 'three/tsl';
-import {loadFlower, detectModelCollision, checkSphereBoxCollision} from '/modelLogic.js'
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import * as COLOR from "./colors.js";
+import {
+  obstacleDict,
+  spawnDict,
+  checkSpawnCollision,
+  checkAllSpawnCollisions,
+  sphereObstacleDict,
+} from "./obstacleDict.js";
+import { FontLoader } from "three/examples/jsm/loaders/FontLoader.js";
+import { modelDirection, pass } from "three/tsl";
+import {
+  loadFlower,
+  detectModelCollision,
+  checkSphereBoxCollision,
+} from "/modelLogic.js";
 import { io } from "socket.io-client";
-import { makeDeco } from './abstractShapes.js';
+import { makeDeco } from "./abstractShapes.js";
 
 const socket = io("https://vdayproject2.onrender.com");
 const otherPlayers = {};
@@ -16,46 +26,282 @@ let playerHoldingFlower = null;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xffb3d9); // Pink background
 
-const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+const renderer = new THREE.WebGLRenderer({
+  antialias: false,
+  powerPreference: "high-performance",
+});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limit pixel ratio for performance
-const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000,
+);
 const loader = new GLTFLoader();
 
-let modelDict = []
+let modelDict = [];
 let flower = null;
 let flowerLoaded = false;
 
+const uiScene = new THREE.Scene();
+const uiCamera = new THREE.OrthographicCamera(
+  -window.innerWidth / 2,
+  window.innerWidth / 2,
+  window.innerHeight / 2,
+  -window.innerHeight / 2,
+  0,
+  10,
+);
+uiCamera.position.z = 5;
+
+const respawnSprite = new THREE.Sprite(
+  new THREE.SpriteMaterial({
+    map: new THREE.TextureLoader().load(
+      "https://raw.githubusercontent.com/Mikeblackbelt/vdayProject/main/image/logo%20-%20Spawn%20Point%20Set.png",
+    ),
+    transparent: true,
+  }),
+);
+respawnSprite.position.set(0, window.innerHeight / 2 - 100, 0);
+respawnSprite.scale.set(200, 100, 1); // pixels now
+respawnSprite.material.opacity = 0;
+uiScene.add(respawnSprite);
+
 loadFlower(scene, (loadedFlower) => {
-    flower = loadedFlower;
-    flowerLoaded = true;
-    modelDict.push(flower);
-    console.log('Flower loaded successfully:', flower);
-    console.log('Flower position:', flower.position);
-    console.log('Flower in modelDict:', modelDict);
+  flower = loadedFlower;
+  flowerLoaded = true;
+  modelDict.push(flower);
+  console.log("Flower loaded successfully:", flower);
+  console.log("Flower position:", flower.position);
+  console.log("Flower in modelDict:", modelDict);
 });
 
+let flower2 = null;
+let flower2Loaded = false;
+
+loadFlower(scene, (loadedFlower) => {
+  flower2 = loadedFlower;
+  flower2Loaded = true;
+  modelDict.push(flower2);
+  flower2.position.set(1, 100, 0); //initial position, will be changed in cutscene
+  flower2.visible = false; //hide until cutscene
+});
+
+let dialogueBox = null;
+
+let fullText = "";
+let currentText = "";
+let charIndex = 0;
+let typingSpeed = 25; // ms per character
+let lastTypeTime = 0;
+let typing = false;
+
+let choiceActive = false;
+let yesButton, noButton;
+
+function createButton(label, xOffset) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+
+  const texture = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+  const btn = new THREE.Sprite(mat);
+
+  // REAL pixel sizing
+  btn.scale.set(200, 60, 1);
+
+  // Position relative to screen center
+  btn.position.set(
+    xOffset,
+    -window.innerHeight / 2 + 40,
+    0
+  );
+
+  btn.userData = { canvas, ctx, texture, label };
+  btn.visible = false;
+
+  uiScene.add(btn);
+  return btn;
+}
 
 
-renderer.setSize( window.innerWidth, window.innerHeight );
-document.body.appendChild( renderer.domElement );
+yesButton = createButton("YES", -120);
+function createDialogueUI() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d");
+
+  const texture = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+
+  dialogueBox = new THREE.Sprite(mat); // ← THIS is what you forgot
+dialogueBox.scale.set(window.innerWidth * 0.6, 140, 1);
+
+  // Center bottom of screen in orthographic space
+  dialogueBox.position.set(0, -window.innerHeight / 2 + 100, 0);
+
+  dialogueBox.userData = { canvas, ctx, texture };
+  dialogueBox.visible = false;
+
+  uiScene.add(dialogueBox);
+}
+
+noButton = createButton("NO", 120);
+
+createDialogueUI();
+
+let show = true
+function startDialogue(text) {
+  fullText = text;
+  currentText = "";
+  charIndex = 0;
+  typing = true;
+  choiceActive = false;
+
+  yesButton.visible = false;
+  noButton.visible = false;
+
+  dialogueBox.visible = true;
+}
+
+function updateDialogue() {
+  if (!typing) return;
+
+  let now = performance.now();
+  if (now - lastTypeTime > typingSpeed) {
+    currentText += fullText[charIndex];
+    charIndex++;
+    lastTypeTime = now;
+
+    drawDialogue(currentText);
+
+    if (charIndex >= fullText.length) {
+      typing = false;
+      if (show) {showChoices();} // text finished
+    }
+  }
+}
+
+function drawDialogue(text) {
+  const { canvas, ctx, texture } = dialogueBox.userData;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "rgba(0,0,0,0.75)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = "white";
+  ctx.font = "28px Arial";
+  ctx.textAlign = "center";
+
+  wrapText(ctx, text, canvas.width / 2, 50, 460, 32);
+
+  texture.needsUpdate = true;
+}
+
+function showChoices() {
+  choiceActive = true;
+  drawButton(yesButton, "#2ecc71");
+  drawButton(noButton, "#e74c3c");
+
+  yesButton.visible = true;
+  noButton.visible = true;
+}
+
+function drawButton(btn, color) {
+  const { canvas, ctx, texture, label } = btn.userData;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = "white";
+  ctx.font = "32px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText(label, canvas.width / 2, 42);
+
+  texture.needsUpdate = true;
+}
+
+window.addEventListener("click", onClick);
+
+function onClick(event) {
+  if (!choiceActive) return;
+
+  const mouse = new THREE.Vector2(
+    (event.clientX / window.innerWidth) * 2 - 1,
+    -(event.clientY / window.innerHeight) * 2 + 1,
+  );
+
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(mouse, uiCamera);
+
+  const intersects = raycaster.intersectObjects([yesButton, noButton]);
+
+  if (intersects.length > 0) {
+    const btn = intersects[0].object;
+
+    if (btn === yesButton) handleChoice(true);
+    if (btn === noButton) handleChoice(false);
+  }
+}
+
+function handleChoice(answer) {
+  show = false;
+  choiceActive = false;
+  yesButton.visible = false;
+  noButton.visible = false;
+  postCutSceneState = true; // trigger cutscene state change
+
+  if (answer) {
+    startDialogue("yipppe :D");
+    let flower2NewPos = sphere2.position.clone().add(new THREE.Vector3(0, 1.5, 0));
+    flower2.position.set(flower2NewPos.x, flower2NewPos.y, flower2NewPos.z);
+  } else {
+    window.close(); // :(
+  }
+}
+
+function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = text.split(" ");
+  let line = "";
+
+  for (let n = 0; n < words.length; n++) {
+    const testLine = line + words[n] + " ";
+    const metrics = ctx.measureText(testLine);
+
+    if (metrics.width > maxWidth && n > 0) {
+      ctx.fillText(line, x, y);
+      line = words[n] + " ";
+      y += lineHeight;
+    } else {
+      line = testLine;
+    }
+  }
+  ctx.fillText(line, x, y);
+}
+
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
 
 // Create a canvas to draw the face
-const canvas = document.createElement('canvas');
+const canvas = document.createElement("canvas");
 canvas.width = 256;
 canvas.height = 256;
-const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext("2d");
 
-let placementMode = true; //change in prod
+let placementMode = false; //change in prod
 const tempObstacles = [];
 //setup for temporary obstacles
 
-
 // Fill with blue background
-ctx.fillStyle = '#4a90e2';
+ctx.fillStyle = "#4a90e2";
 ctx.fillRect(0, 0, 256, 256);
 
 // Draw eyes
-ctx.fillStyle = '#ff09daff';
+ctx.fillStyle = "#ff09daff";
 ctx.beginPath();
 ctx.arc(80, 80, 15, 0, Math.PI * 2);
 ctx.fill();
@@ -64,7 +310,7 @@ ctx.arc(176, 80, 15, 0, Math.PI * 2);
 ctx.fill();
 
 // Draw smile (arc)
-ctx.strokeStyle = '#000000';
+ctx.strokeStyle = "#000000";
 ctx.lineWidth = 8;
 ctx.beginPath();
 ctx.arc(128, 128, 60, 0.2 * Math.PI, 0.8 * Math.PI);
@@ -74,90 +320,97 @@ ctx.stroke();
 const texture = new THREE.CanvasTexture(canvas);
 
 // gameing chafacter- reduce segments for better performance
-const geometry = new THREE.SphereGeometry( 0.5, 16, 16 ); // Reduced from 32,32 to 16,16
+const geometry = new THREE.SphereGeometry(0.5, 16, 16); // Reduced from 32,32 to 16,16
 const material = new THREE.MeshBasicMaterial({ map: texture });
-const sphere = new THREE.Mesh( geometry, material );
+const sphere = new THREE.Mesh(geometry, material);
 sphere.position.y = 0.5;
-scene.add( sphere );
+scene.add(sphere);
 
 makeDeco(scene);
 
 function createOtherPlayer(id) {
-    const geo = new THREE.SphereGeometry(0.5, 16, 16);
-    const mat = new THREE.MeshBasicMaterial({ color: Math.random() * 0xffffff });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.y = 0.5; // FIX: Set initial Y position
-    scene.add(mesh);
-    otherPlayers[id] = mesh;
-    console.log('Created other player:', id, 'at position:', mesh.position);
-    return mesh;
+  const geo = new THREE.SphereGeometry(0.5, 16, 16);
+  const mat = new THREE.MeshBasicMaterial({ color: Math.random() * 0xffffff });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.y = 0.5; // FIX: Set initial Y position
+  scene.add(mesh);
+  otherPlayers[id] = mesh;
+  console.log("Created other player:", id, "at position:", mesh.position);
+  return mesh;
 }
 
-console.info('If render is not connected, render might be behind the latest github commit. If you are a developer, try pulling the latest code and restarting the server. If you are a player, inform the developers :3');
+console.info(
+  "If render is not connected, render might be behind the latest github commit. If you are a developer, try pulling the latest code and restarting the server. If you are a player, inform the developers :3",
+);
 // Current players
 socket.on("currentPlayers", (players) => {
-    console.log("currentPlayers event received:", players);
-    for (let id in players) {
-        if (id !== socket.id) {
-            const mesh = createOtherPlayer(id);
-            mesh.position.set(players[id].x, players[id].y, players[id].z);
-            console.log('Set existing player position:', id, players[id]);
-        }
+  console.log("currentPlayers event received:", players);
+  for (let id in players) {
+    if (id !== socket.id) {
+      const mesh = createOtherPlayer(id);
+      mesh.position.set(players[id].x, players[id].y, players[id].z);
+      console.log("Set existing player position:", id, players[id]);
     }
+  }
 });
 
 // New player joins
 socket.on("newPlayer", (data) => {
-    console.log("newPlayer event received:", data);
-    if (data.id !== socket.id) { // FIX: Don't create self
-        const mesh = createOtherPlayer(data.id);
-        mesh.position.set(data.x, data.y, data.z);
-    }
+  console.log("newPlayer event received:", data);
+  if (data.id !== socket.id) {
+    // FIX: Don't create self
+    const mesh = createOtherPlayer(data.id);
+    mesh.position.set(data.x, data.y, data.z);
+  }
 });
 
 // Player movement
 socket.on("playerMoved", (data) => {
-    if (otherPlayers[data.id]) {
-        otherPlayers[data.id].position.set(data.x, data.y, data.z);
-    }
+  if (otherPlayers[data.id]) {
+    otherPlayers[data.id].position.set(data.x, data.y, data.z);
+  }
 });
 
 // Player disconnects
 socket.on("playerDisconnected", (id) => {
-    console.log("Player disconnected:", id);
-    if (otherPlayers[id]) {
-        scene.remove(otherPlayers[id]);
-        delete otherPlayers[id];
-    }
+  console.log("Player disconnected:", id);
+  if (otherPlayers[id]) {
+    scene.remove(otherPlayers[id]);
+    delete otherPlayers[id];
+  }
 });
 
-
 socket.on("flowerPickedUp", (data) => {
-    console.log('____PICKUP_____');
-    console.log(' ID who picked up:', data.id);
-    console.log('socket ID:', socket.id);
-    console.log('Is it me?', data.id === socket.id);
-    console.log('Other players:', Object.keys(otherPlayers));
-    
-    playerHoldingFlower = data.id;
-    console.log('Set playerHoldingFlower to:', playerHoldingFlower);
+  console.log("____PICKUP_____");
+  console.log(" ID who picked up:", data.id);
+  console.log("socket ID:", socket.id);
+  console.log("Is it me?", data.id === socket.id);
+  console.log("Other players:", Object.keys(otherPlayers));
+
+  playerHoldingFlower = data.id;
+  console.log("Set playerHoldingFlower to:", playerHoldingFlower);
 });
 
 socket.on("flowerDropped", () => {
-    console.log('=== FLOWER DROPPED EVENT ===');
-    playerHoldingFlower = null;
-    console.log('Flower dropped/reset');
+  console.log("=== FLOWER DROPPED EVENT ===");
+  playerHoldingFlower = null;
+  console.log("Flower dropped/reset");
 });
 
-
-
 function playerCollisionCheck() {
-    for (let id in otherPlayers) {
-        if (checkSphereBoxCollision(sphere.position, 0.5, otherPlayers[id].position, new THREE.Vector3(0.5,0.5,0.5))) {
-            console.log('Collided with player', id);
-            return id;
-        }
+  for (let id in otherPlayers) {
+    if (
+      checkSphereBoxCollision(
+        sphere.position,
+        0.5,
+        otherPlayers[id].position,
+        new THREE.Vector3(0.5, 0.5, 0.5),
+      )
+    ) {
+      console.log("Collided with player", id);
+      return id;
     }
+  }
 }
 
 //start pos
@@ -180,130 +433,165 @@ var jumpResolved = true;
 var VelocityY = 0;
 var velocityX = 0;
 var velocityZ = 0;
-var AccelerationY = 0.0098;  //this represents downward acceleration due to gravity
+var AccelerationY = 0.0098; //this represents downward acceleration due to gravity
 var AccelerationX = 0.006; //this represents time it takes to accelrate, deaccleration time is greater by a bit so ill multiply by a arbitary constant
 var AccelerationZ = 0.006; //see above ^_^
 const groundLevel = -999; //this is not an important variable :3
 const sphereRadius = 0.5;
 
-function jump(){
-    if (jumpResolved) {
-        VelocityY = 0.4; // v_y =  v_i - at
-        jumpResolved = false;
-    }
+let postCutSceneState = false; 
+
+function jump() {
+  if (jumpResolved) {
+    VelocityY = 0.4; // v_y =  v_i - at
+    jumpResolved = false;
+  }
 }
 
-window.addEventListener('keydown', (e) => { 
-    keys[e.key] = true;
-    if (e.key === ' ') jump();
+window.addEventListener("keydown", (e) => {
+  keys[e.key] = true;
+  if (e.key === " ") jump();
 });
-window.addEventListener('keyup', (e) => { keys[e.key] = false; });
+window.addEventListener("keyup", (e) => {
+  keys[e.key] = false;
+});
 
 // camera drag ~_~
-window.addEventListener('mousedown', (e) => {
-    isDragging = true;
+window.addEventListener("mousedown", (e) => {
+  isDragging = true;
+  previousMouseX = e.clientX;
+  previousMouseY = e.clientY;
+});
+
+window.addEventListener("mouseup", () => {
+  isDragging = false;
+});
+
+window.addEventListener("mousemove", (e) => {
+  if (isDragging) {
+    const deltaX = e.clientX - previousMouseX; // change in x/y
+    const deltaY = e.clientY - previousMouseY;
+
+    cameraAngleH -= deltaX * 0.005; // Horizontal rotation
+    cameraAngleV -= deltaY * 0.005; // Vertical rotation
+
+    // max angle is abt 180 degrees (looking straight down), min is 0 (looking straight up)
+    cameraAngleV = Math.max(0.1, Math.min(Math.PI - 0.1, cameraAngleV));
+
     previousMouseX = e.clientX;
     previousMouseY = e.clientY;
-});
-
-window.addEventListener('mouseup', () => {
-    isDragging = false;
-});
-
-window.addEventListener('mousemove', (e) => {
-    if (isDragging) {
-        const deltaX = e.clientX - previousMouseX; // change in x/y 
-        const deltaY = e.clientY - previousMouseY;
-        
-        cameraAngleH -= deltaX * 0.005; // Horizontal rotation
-        cameraAngleV -= deltaY * 0.005; // Vertical rotation
-        
-        // max angle is abt 180 degrees (looking straight down), min is 0 (looking straight up)
-        cameraAngleV = Math.max(0.1, Math.min(Math.PI - 0.1, cameraAngleV));
-        
-        previousMouseX = e.clientX;
-        previousMouseY = e.clientY;
-    }
+  }
 });
 
 // Mouse wheel for zoom
-window.addEventListener('wheel', (e) => {
-    cameraDistance += e.deltaY * 0.01;
-    cameraDistance = Math.max(2, Math.min(20, cameraDistance)); // d in [2,20]
+window.addEventListener("wheel", (e) => {
+  cameraDistance += e.deltaY * 0.01;
+  cameraDistance = Math.max(2, Math.min(20, cameraDistance)); // d in [2,20]
 });
 //scene.background = null;
 
 const skyColor = new THREE.Color();
 
 function makeMountain(x, z, height) {
-    const geo = new THREE.ConeGeometry(5, height, 4);
-    const mat = new THREE.MeshStandardMaterial({ color: 0xb57edc, flatShading: true });
-    const m = new THREE.Mesh(geo, mat);
-    m.position.set(x, height/2 - 15, z);
-    scene.add(m);
+  const geo = new THREE.ConeGeometry(5, height, 4);
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0xb57edc,
+    flatShading: true,
+  });
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, height / 2 - 15, z);
+  scene.add(m);
 }
 
-const mountainPositions = [[-40, -40, 30], [-30, -20, 35], [-30, 10, 35], [-30, -5, -35]]
+const mountainPositions = [
+  [-40, -40, 30],
+  [-30, -20, 35],
+  [-30, 10, 35],
+  [-30, -5, -35],
+];
 for (let pos of mountainPositions) {
-    makeMountain(pos[0], pos[1], pos[2]);
+  makeMountain(pos[0], pos[1], pos[2]);
 }
 
 const bubbleMat = new THREE.MeshPhysicalMaterial({
-    color: 0xffffff,
-    emissive: 0xfbcaff,
-    emissiveIntensity: 0.6,
-    transmission: 1,
-    roughness: 0,
-    thickness: 0.5
+  color: 0xffffff,
+  emissive: 0xfbcaff,
+  emissiveIntensity: 0.6,
+  transmission: 1,
+  roughness: 0,
+  thickness: 0.5,
 });
 
 const bubblePositions = [];
 
 for (let i = 0; i < 160; i++) {
-    const bubbleGeo = new THREE.SphereGeometry(Math.random() * 0.3 + 0.13, 16, 16);
-    const bubble = new THREE.Mesh(bubbleGeo, bubbleMat);
-    bubble.position.set((Math.random() - 0.5) * 100, Math.random() * 50, (Math.random() - 0.5) * 100);
-    bubblePositions.push(bubble.position);
-    scene.add(bubble);
-} 
+  const bubbleGeo = new THREE.SphereGeometry(
+    Math.random() * 0.3 + 0.13,
+    16,
+    16,
+  );
+  const bubble = new THREE.Mesh(bubbleGeo, bubbleMat);
+  bubble.position.set(
+    (Math.random() - 0.5) * 100,
+    Math.random() * 50,
+    (Math.random() - 0.5) * 100,
+  );
+  bubblePositions.push(bubble.position);
+  scene.add(bubble);
+}
 
 //loop thru obstacles and add to scene, refer to line 13
 const obstacles = [];
 for (let obstacle of obstacleDict) {
-    const obstacleGeometry = new THREE.BoxGeometry( obstacle[3], obstacle[4], obstacle[5] );
-    const obstacleMaterial = new THREE.MeshLambertMaterial( { emissive: obstacle[6] } );
-    const obstacleMesh = new THREE.Mesh( obstacleGeometry, obstacleMaterial );
-    obstacleMesh.position.set(obstacle[0], obstacle[1], obstacle[2]);
-    scene.add( obstacleMesh );
-    obstacles.push({
-        mesh: obstacleMesh,
-        halfExtents: new THREE.Vector3(obstacle[3]/2, obstacle[4]/2, obstacle[5]/2)
-    });
+  const obstacleGeometry = new THREE.BoxGeometry(
+    obstacle[3],
+    obstacle[4],
+    obstacle[5],
+  );
+  const obstacleMaterial = new THREE.MeshLambertMaterial({
+    emissive: obstacle[6],
+  });
+  const obstacleMesh = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+  obstacleMesh.position.set(obstacle[0], obstacle[1], obstacle[2]);
+  scene.add(obstacleMesh);
+  obstacles.push({
+    mesh: obstacleMesh,
+    halfExtents: new THREE.Vector3(
+      obstacle[3] / 2,
+      obstacle[4] / 2,
+      obstacle[5] / 2,
+    ),
+  });
 }
 
 for (let obstacle of sphereObstacleDict) {
-    const obstacleGeometry = new THREE.SphereGeometry( obstacle[3], 16, 16);
-    const obstacleMaterial = new THREE.MeshLambertMaterial({emissive: obstacle[4]});
-    const obstacleMesh = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
-    obstacleMesh.position.set(obstacle[0],obstacle[1],obstacle[2]);
-    scene.add(obstacleMesh);
-    obstacles.push({
-        mesh: obstacleMesh,
-        halfExtents: new THREE.Vector3(obstacle[3]/2, obstacle[3]/2, obstacle[3]/2)
-    });
+  const obstacleGeometry = new THREE.SphereGeometry(obstacle[3], 16, 16);
+  const obstacleMaterial = new THREE.MeshLambertMaterial({
+    emissive: obstacle[4],
+  });
+  const obstacleMesh = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+  obstacleMesh.position.set(obstacle[0], obstacle[1], obstacle[2]);
+  scene.add(obstacleMesh);
+  obstacles.push({
+    mesh: obstacleMesh,
+    halfExtents: new THREE.Vector3(
+      obstacle[3] / 2,
+      obstacle[3] / 2,
+      obstacle[3] / 2,
+    ),
+  });
 }
-
 
 // sphere-box collision detection
 
-const dataView = document.createElement('div'); 
-dataView.style.position = 'absolute';
-dataView.style.top = '10px';
-dataView.style.left = '10px';
-dataView.style.color = 'black';
-dataView.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
-dataView.style.padding = '10px';
-dataView.style.fontFamily = 'Arial, sans-serif';
+const dataView = document.createElement("div");
+dataView.style.position = "absolute";
+dataView.style.top = "10px";
+dataView.style.left = "10px";
+dataView.style.color = "black";
+dataView.style.backgroundColor = "rgba(255, 255, 255, 0.7)";
+dataView.style.padding = "10px";
+dataView.style.fontFamily = "Arial, sans-serif";
 dataView.innerHTML = `<p>Use WASD or Arrow keys to move</p>
 <p>Space to jump</p>
 <p>Drag mouse to rotate camera</p>
@@ -311,7 +599,7 @@ dataView.innerHTML = `<p>Use WASD or Arrow keys to move</p>
 <p>Sphere Position: ${sphere.position.x.toFixed(2)}, ${sphere.position.y > 0.01 || sphere.position.y < -0.01 ? sphere.position.y.toFixed(2) : "0.00"}, ${sphere.position.z.toFixed(2)}</p>`;
 document.body.appendChild(dataView);
 
-//this is wordy but wtv. i will probably remove this once finished. 
+//this is wordy but wtv. i will probably remove this once finished.
 
 let lastFrameTime = performance.now();
 let frameCount = 0;
@@ -335,11 +623,11 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
 
-let spawn = new THREE.Vector3(0,0,0); //spawn point,  dynamically change
-let finalSpawnIdx = spawnDict.length - 1; //play cutscne after hitting 
+let spawn = new THREE.Vector3(0, 0, 0); //spawn point,  dynamically change
+let finalSpawnIdx = spawnDict.length - 1; //play cutscne after hitting
 // Update dataView less frequently (every 10 frames)
 function updateDataView() {
-    dataView.innerHTML = `<p>Use WASD or Arrow keys to move</p>
+  dataView.innerHTML = `<p>Use WASD or Arrow keys to move</p>
 <p>Space to jump</p>
 <p>Drag mouse to rotate camera</p>
 <p>Scroll to zoom.</p>
@@ -368,341 +656,357 @@ ground.receiveShadow = true;
 ground.position.y = -15;
 scene.add(ground);
 
-const shadowTex = new THREE.TextureLoader().load('shadow.png');
-const shadowMat = new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true });
-const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1.2,1.2), shadowMat);
-shadow.rotation.x = -Math.PI/2;
+const shadowTex = new THREE.TextureLoader().load("shadow.png");
+const shadowMat = new THREE.MeshBasicMaterial({
+  map: shadowTex,
+  transparent: true,
+});
+const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2), shadowMat);
+shadow.rotation.x = -Math.PI / 2;
 scene.add(shadow);
-
-const uiScene = new THREE.Scene();
-const uiCamera = new THREE.OrthographicCamera(
-    -window.innerWidth / 2,
-     window.innerWidth / 2,
-     window.innerHeight / 2,
-    -window.innerHeight / 2,
-    0,
-    10
-);
-uiCamera.position.z = 5;
-
-const respawnSprite = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: new THREE.TextureLoader().load('https://raw.githubusercontent.com/Mikeblackbelt/vdayProject/main/image/logo%20-%20Spawn%20Point%20Set.png'),
-    transparent: true
-}));
-respawnSprite.position.set(0, window.innerHeight/2 - 100, 0);
-respawnSprite.scale.set(200,100, 1); // pixels now
-respawnSprite.material.opacity = 0;
-uiScene.add(respawnSprite);
 
 scene.fog = new THREE.FogExp2(0xffb3d9, 0.031);
 
 let lastSpawnSet = 0;
 let holdingFlowers = false;
 let cutScenePlaying = false;
+let cutSceneAlreadyTrigged = false;
 let cutSceneStartTime = 0;
 let flowerSpawnedCutscene = false;
 
 let sphere2 = null; // Declare sphere2 in a scope accessible to both startCutScene and animate
 
 function startcutScene() {
-    holdingFlowers = true;
-    camera.position.set(0, 104,5);
-    camera.lookAt(0, 100, 0);
+  holdingFlowers = true;
+  camera.position.set(0, 104, 5);
+  camera.lookAt(0, 100, 0);
 
-    sphere.position.set(-2, 101, 0); // example y=0.5, z=0
-    scene.add(sphere);
+  sphere.position.set(-2, 101, 0); // example y=0.5, z=0
+  scene.add(sphere);
 
-    const sphereGeo2 = new THREE.SphereGeometry(0.5, 16, 16);
-    const sphereMat2 = new THREE.MeshLambertMaterial({ color: COLOR.pink });
-    sphere2 = new THREE.Mesh(sphereGeo2, sphereMat2);
-    sphere2.position.set(1, sphere.position.y, sphere.position.z); // same y,z
-    scene.add(sphere2);
+  const sphereGeo2 = new THREE.SphereGeometry(0.5, 16, 16);
+  const sphereMat2 = new THREE.MeshLambertMaterial({ color: COLOR.pink });
+  sphere2 = new THREE.Mesh(sphereGeo2, sphereMat2);
+  sphere2.position.set(1, sphere.position.y, sphere.position.z); // same y,z
+  scene.add(sphere2);
 
-    sphere.lookAt(sphere2.position);
-    sphere.rotateOnAxis(new THREE.Vector3(0,1,0),3 * Math.PI / 2); // make them face each other
-    sphere2.lookAt(sphere.position);
-    cutScenePlaying = true;
-    cutSceneStartTime = performance.now();
-
+  sphere.lookAt(sphere2.position);
+  sphere.rotateOnAxis(new THREE.Vector3(0, 1, 0), (3 * Math.PI) / 2); // make them face each other
+  sphere2.lookAt(sphere.position);
+  cutScenePlaying = true;
+  cutSceneStartTime = performance.now();
 }
 //y has different bc of the constant change due to the force applied by gravity
 function animate() {
-    if (cutScenePlaying) {
-        let elapsed = performance.now() - cutSceneStartTime;
-        //program cutScene movement
-        if (elapsed < 1000) {
-            console.log('Cutscene part 1, elapsed:', elapsed);
-            //part 1, sphere move toward other sphere
-            let t = elapsed / 1000;
-            sphere.position.x = -2 + 1.5 * t; // move from x=-2 to x=0.5 over 1 second
+  if (cutScenePlaying) {
+    cutSceneAlreadyTrigged = true; // ensure cutscene doesn't retrigger
+    let elapsed = performance.now() - cutSceneStartTime;
 
-
-        } else if (elapsed < 2000) {
-            //part 2, pause for a moment. also spawn a flower in the model head of the blue sphere
-            if (elapsed > 1000 && !flowerSpawnedCutscene && playerHoldingFlower !== socket.id) {
-                const flowerGeo = new THREE.SphereGeometry(0.2, 8, 8);
-                const flowerMat = new THREE.MeshBasicMaterial({ color: COLOR.yellow });
-                const flower = new THREE.Mesh(flowerGeo, flowerMat);
-                flower.position.set(sphere2.position.x, sphere2.position.y + 1.2, sphere2.position.z);
-                scene.add(flower);
-                flowerSpawnedCutscene = true;
-            }
-        } else {
-            ///this should load a dialog box and a yes/no button
-        }
-        renderer.autoClear = false;
-        renderer.clear();
-        renderer.render(scene, camera);     // 3D world
-        renderer.render(uiScene, uiCamera); // UI on top
-        return
-    }
-    const currentTime = performance.now();
-    const deltaTime = Math.max(2 , currentTime - lastFrameTime); //max deltatime bc out of focus
-    moveSpeedAdjusted = moveSpeed * (deltaTime / 16.67);  //calc for calculating lag
-    lastFrameTime = currentTime;
-    
-    //updateSky();
-    // Update dataView only every 10 frames
-    frameCount++;
-    if (frameCount % 10 === 0) {
-        updateDataView();
-    }
-    
-    if (placementMode) {
-        //alow obstacle placement by the user.
-        //fix bug where a trillion cubes spawn 
-        renderer.render( scene, camera );
-        if (tempObstacles.length > 0) {
-            for (let tempCube of tempObstacles) {
-                scene.remove(tempCube);
-            }
-        }
-        let obstaclePos = new THREE.Vector3();
-        obstaclePos.copy(camera.position);
-        obstaclePos.addScaledVector(camera.getWorldDirection(tempVec), 5);
-        obstaclePos.y = sphere.position.y - 1; //place at player height
-        obstaclePos.x = sphere.position.x;
-        obstaclePos.z = sphere.position.z;
-        let cubeGeometry = new THREE.BoxGeometry( 1, 1, 1 ); 
-        //since this doesnt place permatnely and is simply for reference, the actual scale can be adjusted
-        let cubeMaterial = new THREE.MeshBasicMaterial( { color: 0x00ff00, opacity: 0.5, transparent: true } );
-        let tempCube = new THREE.Mesh( cubeGeometry, cubeMaterial );
-        tempCube.position.copy(obstaclePos);
-        scene.add( tempCube );
-        tempObstacles.push(tempCube);
-        if (keys['Enter'] && frameCount % 10 === 0) {
-            //create the obstalce in the scene for the session, after page reload will automatically disappear
-            const obstacleGeometry = new THREE.BoxGeometry( 1, 1, 1 );
-            const obstacleMaterial = new THREE.MeshBasicMaterial( { color: COLOR.purple} );
-            const obstacleMesh = new THREE.Mesh( obstacleGeometry, obstacleMaterial );
-            obstacleMesh.position.copy(obstaclePos);
-            scene.add( obstacleMesh );
-            obstacles.push({
-                mesh: obstacleMesh,
-                halfExtents: new THREE.Vector3(0.5, 0.5, 0.5)
-            });
-            obstacleDict.push([obstaclePos.x, obstaclePos.y, obstaclePos.z, 1, 1, 1, COLOR.purple]);
-            console.log('Obstacle placed at', obstaclePos);
-            console.log('Obstacles', obstacleDict);  //this line crashes the game? weird 
-
-    
-        }
-    }
-    
-    if (frameCount % 5 == 1) {
-        bubblePositions.forEach(pos => {
-            pos.y += 0.03;
-            //pos.x += Math.sin(currentTime * 0.001 + pos.z) * 0.0001; // add some horizontal movement
-            //pos.z += Math.cos(currentTime * 0.001 + pos.x) * 0.0001; // add some depth movement
-            pos.y = ((pos.y+ 10) % 50) - 10; // reset to bottom after reaching top
-        });
-    }
-    // Update cached trig values only if angles changed
-    if (lastCameraAngleH !== cameraAngleH) {
-        cachedSinH = Math.sin(cameraAngleH);
-        cachedCosH = Math.cos(cameraAngleH);
-        lastCameraAngleH = cameraAngleH;
-    }
-    if (lastCameraAngleV !== cameraAngleV) {
-        cachedSinV = Math.sin(cameraAngleV);
-        cachedCosV = Math.cos(cameraAngleV);
-        lastCameraAngleV = cameraAngleV;
-    }
-    
-    // backward (s arrowdown)
-    if (keys['ArrowDown'] || keys['s']) {
-        velocityZ = Math.min(velocityZ + AccelerationZ, moveSpeedAdjusted);
-    } else if (velocityZ > 0) {
-        velocityZ = Math.max(velocityZ - 0.8*AccelerationZ, 0);
-    }
-
-    // forward (arrowup w)
-    if (keys['ArrowUp'] || keys['w']) {
-        velocityZ = Math.max(velocityZ - AccelerationZ, -moveSpeedAdjusted);
-    } else if (velocityZ < 0) {
-        velocityZ = Math.min(velocityZ + 0.8*AccelerationZ, 0);
-    }
-
-    //these are in reverse order bc the keys were in reverse order and its easier to just swap the conditions 
-
-    // Left movement (A or ArrowLeft)
-    if (keys['ArrowLeft'] || keys['a']) {
-        velocityX = Math.max(velocityX - AccelerationX, -moveSpeedAdjusted);
-    } else if (velocityX < 0) {
-        velocityX = Math.min(velocityX + 0.8*AccelerationX, 0);
-    }
-
-    // Right movement (D or ArrowRight)
-    if (keys['ArrowRight'] || keys['d']) {
-        velocityX = Math.min(velocityX + AccelerationX, moveSpeedAdjusted);
-    } else if (velocityX > 0) {
-        velocityX = Math.max(velocityX - 0.8*AccelerationX, 0);
-    }
-
-    if (frameCount % 2 == 0) {
-        sphere.rotateOnAxis(tempVec.set(1, 0, 0), -5*velocityX);
-        sphere.rotateOnAxis(tempVec.set(0, 0, 1), -5*velocityZ);
-    } //ykw even i dont know... framecount is always an integer `~`
-    // move the roll outside the key checks to account for accel and deaccel
-    // Apply velocities to position (transform to world space based on camera angle)
-    sphere.position.z += velocityZ * cachedCosH - velocityX * cachedSinH;
-    sphere.position.x += velocityZ * cachedSinH + velocityX * cachedCosH;
-
-    let yRotation = VelocityY * 0.4;
-    sphere.rotateOnAxis(tempVec.set(0, 0, 1), yRotation);
-
-    sphere.position.y += VelocityY ;
-    VelocityY -= AccelerationY * deltaTime/16.67; // apply gravity in respect to frame rate
-    
-    // fix: send position updates more frequently but throttled
-    if (frameCount % 2 === 0) {
-        socket.emit("updatePosition", {
-            x: sphere.position.x,
-            y: sphere.position.y,
-            z: sphere.position.z
-        });
-    }
-
-    // Check for flower collision only if flower is loaded, also allow stealing
-    if (flowerLoaded && (!playerHoldingFlower || playerHoldingFlower === socket.id)) {
-        const collision = detectModelCollision(sphere.position, modelDict, flowerLoaded, scene, playerHoldingFlower); // 0.8 is an approximate radius for the flower model
-        if (collision && collision.length > 0) {
-            console.log('Flower picked up!');
-            playerHoldingFlower = socket.id; // set it immediately locally
-            socket.emit("flowerPickedUp", { id: socket.id });
-        }
-    }
-    
-    //  only check obstacles within reasonable distance
-    const checkRadius = 8; //8 unit is reasonable just dont make spheres with r > 8 and cubes with length > 16
-    for (let obstacle of obstacles) {
-        // quick distance check before expensive collision detection
-        const dx = sphere.position.x - obstacle.mesh.position.x;
-        const dy = sphere.position.y - obstacle.mesh.position.y;
-        const dz = sphere.position.z - obstacle.mesh.position.z;
-        const distSquared = dx*dx + dy*dy + dz*dz;
-        
-        // Skip if too far away
-        if (distSquared > checkRadius * checkRadius) continue;
-        
-        const pushOut = checkSphereBoxCollision(
-            sphere.position, 
-            sphereRadius, 
-            obstacle.mesh.position, 
-            obstacle.halfExtents
+    if (elapsed < 1000) {
+      let t = elapsed / 1000;
+      sphere.position.x = -2 + 1.5 * t;
+    } else if (elapsed < 2000) {
+      if (!flowerSpawnedCutscene && playerHoldingFlower !== socket.id) {
+        flower2.visible = true;
+        flower2.position.set(-0.5, 102.5, 0);
+        flowerSpawnedCutscene = true;
+      }
+    } else if (!postCutSceneState) {
+      if (!dialogueBox) createDialogueUI(); // safety
+      if (!dialogueBox.visible) dialogueBox.visible = true; // safety
+      if (!typing && !choiceActive) {
+        startDialogue(
+          "Will you be my Valentine? :3 (Click YES or NO (preferably yes :3))",
         );
-        
-        if (pushOut) {
-            sphere.position.add(pushOut);
-            //console.log('Collision detected, pushing sphere out by', pushOut);
-            
-            // If collision is mainly vertical (hittin top or bottom), reset velocity
-            if (Math.abs(pushOut.y) > Math.abs(pushOut.x) && Math.abs(pushOut.y) > Math.abs(pushOut.z)) {
-                VelocityY = 0;
-                if (pushOut.y > 0) {
-                    jumpResolved = true; // can jump again if landed on top
-                }
-            }
-        }
-    }
-    
-    if (sphere.position.y <= groundLevel) {
-        sphere.position.y = groundLevel;
-        VelocityY = 0;
-        jumpResolved = true;
-    }
-    
-    // trig - use cached values
-    cameraOffset.set(
-        cameraDistance * cachedSinV * cachedSinH,
-        cameraDistance * cachedCosV,
-        cameraDistance * cachedSinV * cachedCosH
-    );
-
-    if (sphere.position.y < -10) {
-        sphere.position.set(spawn.x, spawn.y, spawn.z);
-        VelocityY = 0; 
-    }
-    
-    desiredCameraPos.addVectors(sphere.position, cameraOffset);
-    camera.position.copy(desiredCameraPos);
-    camera.lookAt(sphere.position);
-
-    let spawnIndex = checkAllSpawnCollisions(sphere.position);
-    if (spawnIndex !== 0 && lastSpawnSet != spawnIndex) {
-        let spawnPoint = new THREE.Vector3(...spawnDict[spawnIndex]).addScaledVector(new THREE.Vector3(0,3,0), sphereRadius + 0.1);
-        spawn.set(spawnPoint.x, spawnPoint.y, spawnPoint.z);
-        lastSpawnSet = spawnIndex;
-        console.log('Spawn point set to:', spawn);
-        respawnSprite.material.opacity = 1; 
-        setInterval(() => {
-            respawnSprite.material.opacity -= 0.01;
-            if (respawnSprite.material.opacity <= 0) {
-                //console.log(' i should clear the interval :3');
-                clearInterval();
-            }
-        }, 20);
-        if (spawnIndex === finalSpawnIdx) {
-            startcutScene();
-            cutScenePlaying = true;
-        }
+      }
     }
 
-    // Update flower position - FIXED LOGIC
-    if (flowerLoaded && flower) {
-        if (playerHoldingFlower === socket.id) {
-            // Current player is holding the flower
-            flower.position.set(
-                sphere.position.x, 
-                sphere.position.y + 1.2, 
-                sphere.position.z
-            );
-            flower.visible = true;
-            flower.rotation.y += 0.03;
-            flower.position.y += Math.sin(performance.now() * 0.003) * 0.02;
-
-        } else if (playerHoldingFlower && otherPlayers[playerHoldingFlower]) {
-            // Another player is holding the flower
-            const otherPlayer = otherPlayers[playerHoldingFlower];
-            flower.position.set(
-                otherPlayer.position.x,
-                otherPlayer.position.y + 1.2,
-                otherPlayer.position.z
-            );
-            flower.visible = true;
-            flower.rotation.y += 0.03;
-            flower.position.y += Math.sin(performance.now() * 0.003) * 0.02;
-
-        } else if (!playerHoldingFlower) {
-            // No one is holding the flower - keep it at its spawn location
-            flower.visible = true;
-        }
-    }
+    updateDialogue(true); // ← THIS WAS MISSING
 
     renderer.autoClear = false;
     renderer.clear();
-    renderer.render(scene, camera);     // 3D world
-    renderer.render(uiScene, uiCamera); // UI on top
+    renderer.render(scene, camera);
+    renderer.render(uiScene, uiCamera);
+    return;
+  }
+  if (postCutSceneState) {
+    cutScenePlaying = false;
+    updateDialogue(false); 
+
+    
+  }
+
+  const currentTime = performance.now();
+  const deltaTime = Math.max(2, currentTime - lastFrameTime); //max deltatime bc out of focus
+  moveSpeedAdjusted = moveSpeed * (deltaTime / 16.67); //calc for calculating lag
+  lastFrameTime = currentTime;
+
+  //updateSky();
+  // Update dataView only every 10 frames
+  frameCount++;
+  if (frameCount % 10 === 0) {
+    updateDataView();
+  }
+
+  if (placementMode) {
+    //alow obstacle placement by the user.
+    //fix bug where a trillion cubes spawn
+    renderer.render(scene, camera);
+    if (tempObstacles.length > 0) {
+      for (let tempCube of tempObstacles) {
+        scene.remove(tempCube);
+      }
+    }
+    let obstaclePos = new THREE.Vector3();
+    obstaclePos.copy(camera.position);
+    obstaclePos.addScaledVector(camera.getWorldDirection(tempVec), 5);
+    obstaclePos.y = sphere.position.y - 1; //place at player height
+    obstaclePos.x = sphere.position.x;
+    obstaclePos.z = sphere.position.z;
+    let cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
+    //since this doesnt place permatnely and is simply for reference, the actual scale can be adjusted
+    let cubeMaterial = new THREE.MeshBasicMaterial({
+      color: 0x00ff00,
+      opacity: 0.5,
+      transparent: true,
+    });
+    let tempCube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+    tempCube.position.copy(obstaclePos);
+    scene.add(tempCube);
+    tempObstacles.push(tempCube);
+    if (keys["Enter"] && frameCount % 10 === 0) {
+      //create the obstalce in the scene for the session, after page reload will automatically disappear
+      const obstacleGeometry = new THREE.BoxGeometry(1, 1, 1);
+      const obstacleMaterial = new THREE.MeshBasicMaterial({
+        color: COLOR.purple,
+      });
+      const obstacleMesh = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+      obstacleMesh.position.copy(obstaclePos);
+      scene.add(obstacleMesh);
+      obstacles.push({
+        mesh: obstacleMesh,
+        halfExtents: new THREE.Vector3(0.5, 0.5, 0.5),
+      });
+      obstacleDict.push([
+        obstaclePos.x,
+        obstaclePos.y,
+        obstaclePos.z,
+        1,
+        1,
+        1,
+        COLOR.purple,
+      ]);
+      console.log("Obstacle placed at", obstaclePos);
+      console.log("Obstacles", obstacleDict); //this line crashes the game? weird
+    }
+  }
+
+  if (frameCount % 5 == 1) {
+    bubblePositions.forEach((pos) => {
+      pos.y += 0.03;
+      //pos.x += Math.sin(currentTime * 0.001 + pos.z) * 0.0001; // add some horizontal movement
+      //pos.z += Math.cos(currentTime * 0.001 + pos.x) * 0.0001; // add some depth movement
+      pos.y = ((pos.y + 10) % 50) - 10; // reset to bottom after reaching top
+    });
+  }
+  // Update cached trig values only if angles changed
+  if (lastCameraAngleH !== cameraAngleH) {
+    cachedSinH = Math.sin(cameraAngleH);
+    cachedCosH = Math.cos(cameraAngleH);
+    lastCameraAngleH = cameraAngleH;
+  }
+  if (lastCameraAngleV !== cameraAngleV) {
+    cachedSinV = Math.sin(cameraAngleV);
+    cachedCosV = Math.cos(cameraAngleV);
+    lastCameraAngleV = cameraAngleV;
+  }
+
+  // backward (s arrowdown)
+  if (keys["ArrowDown"] || keys["s"]) {
+    velocityZ = Math.min(velocityZ + AccelerationZ, moveSpeedAdjusted);
+  } else if (velocityZ > 0) {
+    velocityZ = Math.max(velocityZ - 0.8 * AccelerationZ, 0);
+  }
+
+  // forward (arrowup w)
+  if (keys["ArrowUp"] || keys["w"]) {
+    velocityZ = Math.max(velocityZ - AccelerationZ, -moveSpeedAdjusted);
+  } else if (velocityZ < 0) {
+    velocityZ = Math.min(velocityZ + 0.8 * AccelerationZ, 0);
+  }
+
+  //these are in reverse order bc the keys were in reverse order and its easier to just swap the conditions
+
+  // Left movement (A or ArrowLeft)
+  if (keys["ArrowLeft"] || keys["a"]) {
+    velocityX = Math.max(velocityX - AccelerationX, -moveSpeedAdjusted);
+  } else if (velocityX < 0) {
+    velocityX = Math.min(velocityX + 0.8 * AccelerationX, 0);
+  }
+
+  // Right movement (D or ArrowRight)
+  if (keys["ArrowRight"] || keys["d"]) {
+    velocityX = Math.min(velocityX + AccelerationX, moveSpeedAdjusted);
+  } else if (velocityX > 0) {
+    velocityX = Math.max(velocityX - 0.8 * AccelerationX, 0);
+  }
+
+  if (frameCount % 2 == 0) {
+    sphere.rotateOnAxis(tempVec.set(1, 0, 0), -5 * velocityX);
+    sphere.rotateOnAxis(tempVec.set(0, 0, 1), -5 * velocityZ);
+  } //ykw even i dont know... framecount is always an integer `~`
+  // move the roll outside the key checks to account for accel and deaccel
+  // Apply velocities to position (transform to world space based on camera angle)
+  sphere.position.z += velocityZ * cachedCosH - velocityX * cachedSinH;
+  sphere.position.x += velocityZ * cachedSinH + velocityX * cachedCosH;
+
+  let yRotation = VelocityY * 0.2;
+  sphere.rotateOnAxis(tempVec.set(0, 0, 1), yRotation);
+
+  sphere.position.y += VelocityY;
+  VelocityY -= (AccelerationY * deltaTime) / 16.67; // apply gravity in respect to frame rate
+
+  // fix: send position updates more frequently but throttled
+  if (frameCount % 2 === 0) {
+    socket.emit("updatePosition", {
+      x: sphere.position.x,
+      y: sphere.position.y,
+      z: sphere.position.z,
+    });
+  }
+
+  // Check for flower collision only if flower is loaded, also allow stealing
+  if (
+    flowerLoaded &&
+    (!playerHoldingFlower || playerHoldingFlower === socket.id)
+  ) {
+    const collision = detectModelCollision(
+      sphere.position,
+      modelDict,
+      flowerLoaded,
+      scene,
+      playerHoldingFlower,
+    ); // 0.8 is an approximate radius for the flower model
+    if (collision && collision.length > 0) {
+      console.log("Flower picked up!");
+      playerHoldingFlower = socket.id; // set it immediately locally
+      socket.emit("flowerPickedUp", { id: socket.id });
+    }
+  }
+
+  //  only check obstacles within reasonable distance
+  const checkRadius = 8; //8 unit is reasonable just dont make spheres with r > 8 and cubes with length > 16
+  for (let obstacle of obstacles) {
+    // quick distance check before expensive collision detection
+    const dx = sphere.position.x - obstacle.mesh.position.x;
+    const dy = sphere.position.y - obstacle.mesh.position.y;
+    const dz = sphere.position.z - obstacle.mesh.position.z;
+    const distSquared = dx * dx + dy * dy + dz * dz;
+
+    // Skip if too far away
+    if (distSquared > checkRadius * checkRadius) continue;
+
+    const pushOut = checkSphereBoxCollision(
+      sphere.position,
+      sphereRadius,
+      obstacle.mesh.position,
+      obstacle.halfExtents,
+    );
+
+    if (pushOut) {
+      sphere.position.add(pushOut);
+      //console.log('Collision detected, pushing sphere out by', pushOut);
+
+      // If collision is mainly vertical (hittin top or bottom), reset velocity
+      if (
+        Math.abs(pushOut.y) > Math.abs(pushOut.x) &&
+        Math.abs(pushOut.y) > Math.abs(pushOut.z)
+      ) {
+        VelocityY = 0;
+        if (pushOut.y > 0) {
+          jumpResolved = true; // can jump again if landed on top
+        }
+      }
+    }
+  }
+
+  if (sphere.position.y <= groundLevel) {
+    sphere.position.y = groundLevel;
+    VelocityY = 0;
+    jumpResolved = true;
+  }
+
+  // trig - use cached values
+  cameraOffset.set(
+    cameraDistance * cachedSinV * cachedSinH,
+    cameraDistance * cachedCosV,
+    cameraDistance * cachedSinV * cachedCosH,
+  );
+
+  if (sphere.position.y < -10) {
+    sphere.position.set(spawn.x, spawn.y, spawn.z);
+    VelocityY = 0;
+  }
+
+  desiredCameraPos.addVectors(sphere.position, cameraOffset);
+  camera.position.copy(desiredCameraPos);
+  camera.lookAt(sphere.position);
+
+  let spawnIndex = checkAllSpawnCollisions(sphere.position);
+  if (spawnIndex !== 0 && lastSpawnSet != spawnIndex) {
+    let spawnPoint = new THREE.Vector3(
+      ...spawnDict[spawnIndex],
+    ).addScaledVector(new THREE.Vector3(0, 3, 0), sphereRadius + 0.1);
+    spawn.set(spawnPoint.x, spawnPoint.y, spawnPoint.z);
+    lastSpawnSet = spawnIndex;
+    console.log("Spawn point set to:", spawn);
+    respawnSprite.material.opacity = 1;
+    setInterval(() => {
+      respawnSprite.material.opacity -= 0.01;
+      if (respawnSprite.material.opacity <= 0) {
+        //console.log(' i should clear the interval :3');
+        clearInterval();
+      }
+    }, 20);
+    if (spawnIndex === finalSpawnIdx && !cutSceneAlreadyTrigged) {
+      startcutScene();
+      cutScenePlaying = true;
+    }
+  }
+
+  // Update flower position - FIXED LOGIC
+  if (flowerLoaded && flower) {
+    if (playerHoldingFlower === socket.id) {
+      // Current player is holding the flower
+      flower.position.set(
+        sphere.position.x,
+        sphere.position.y + 1.2,
+        sphere.position.z,
+      );
+      flower.visible = true;
+      flower.rotation.y += 0.03;
+      flower.position.y += Math.sin(performance.now() * 0.003) * 0.02;
+    } else if (playerHoldingFlower && otherPlayers[playerHoldingFlower]) {
+      // Another player is holding the flower
+      const otherPlayer = otherPlayers[playerHoldingFlower];
+      flower.position.set(
+        otherPlayer.position.x,
+        otherPlayer.position.y + 1.2,
+        otherPlayer.position.z,
+      );
+      flower.visible = true;
+      flower.rotation.y += 0.03;
+      flower.position.y += Math.sin(performance.now() * 0.003) * 0.02;
+    } else if (!playerHoldingFlower) {
+      // No one is holding the flower - keep it at its spawn location
+      flower.visible = true;
+    }
+  }
+
+  renderer.autoClear = false;
+  renderer.clear();
+  renderer.render(scene, camera); // 3D world
+  renderer.render(uiScene, uiCamera); // UI on top
 }
 
-renderer.setAnimationLoop( animate );
+renderer.setAnimationLoop(animate);
