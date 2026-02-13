@@ -756,7 +756,7 @@ function animate() {
       //document.removeChild(document.getElementById('audio'));
       // Play audio - syncs with visual effect
       stopPlaylist(); // Stop background music
-      const audio = new Audio("https://github.com/Mikeblackbelt/vdayProject/blob/main/audio/za%20warudo.mp3?raw=true");
+    const audio = new Audio("https://raw.githubusercontent.com/Mikeblackbelt/vdayProject/main/audio/za%20warudo.mp3");
       audio.play();
       
       // Trigger time stop with dramatic shockwave
