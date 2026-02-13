@@ -279,6 +279,7 @@ function handleChoice(answer) {
     startDialogue("yipppe :D");
     let flower2NewPos = sphere2.position.clone().add(new THREE.Vector3(0, 1.5, 0));
     flower2.position.set(flower2NewPos.x, flower2NewPos.y, flower2NewPos.z);
+    sphere.position.set(sphere.position.x + 0.7, sphere.position.y, sphere.position.z); 
   } else {
     // Trigger Za Warudo!
     cutSceneNo = true;
