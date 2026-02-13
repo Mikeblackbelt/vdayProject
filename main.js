@@ -730,6 +730,15 @@ function startCutScene() {
   cutSceneStartTime = performance.now();
 }
 
+let zaWarudoAudio = new Audio(
+  "https://raw.githubusercontent.com/Mikeblackbelt/vdayProject/main/audio/za%20warudo.mp3"
+);
+
+// Unlock audio on first click
+window.addEventListener("click", () => {
+  zaWarudoAudio.load();
+}, { once: true });
+
 const clock = new THREE.Clock();
 
 //y has different bc of the constant change due to the force applied by gravity
@@ -756,9 +765,8 @@ function animate() {
       //document.removeChild(document.getElementById('audio'));
       // Play audio - syncs with visual effect
       stopPlaylist(); // Stop background music
-    const audio = new Audio("https://raw.githubusercontent.com/Mikeblackbelt/vdayProject/main/audio/za%20warudo.mp3");
-      audio.play();
-      
+    zaWarudoAudio.play().catch(e => console.log("Audio failed:", e));
+
       // Trigger time stop with dramatic shockwave
       
       activateZaWarudo();//zaWarudo();
