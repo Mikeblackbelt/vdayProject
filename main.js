@@ -731,7 +731,7 @@ function startCutScene() {
 }
 
 let zaWarudoAudio = new Audio(
-  "/zaWarudo.mp3"
+  "/za-warudo-dios-the-world.mp3"
 );
 
 // Unlock audio on first click
