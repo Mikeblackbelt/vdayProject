@@ -731,7 +731,7 @@ function startCutScene() {
 }
 
 let zaWarudoAudio = new Audio(
-  "https://raw.githubusercontent.com/Mikeblackbelt/vdayProject/main/audio/za%20warudo.mp3"
+  "https://raw.githubusercontent.com/Mikeblackbelt/vdayProject/audio/za%20warudo.mp3"
 );
 
 // Unlock audio on first click
