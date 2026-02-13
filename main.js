@@ -18,6 +18,22 @@ import {
 } from "/modelLogic.js";
 import { io } from "socket.io-client";
 import { makeDeco } from "./abstractShapes.js";
+import {
+  initZaWarudo,
+  activateZaWarudo,
+  updateZaWarudo,
+  renderZaWarudo
+} from "./zaWarudo.js";
+
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+
+import { currentAudio, startPlaylist, stopPlaylist } from "./playlist.js";
+
+window.addEventListener("click", () => {
+  startPlaylist();
+}, { once: true });
 
 const socket = io("https://vdayproject2.onrender.com");
 const otherPlayers = {};
@@ -38,6 +54,8 @@ const camera = new THREE.PerspectiveCamera(
   1000,
 );
 const loader = new GLTFLoader();
+
+
 
 let modelDict = [];
 let flower = null;
@@ -78,6 +96,8 @@ loadFlower(scene, (loadedFlower) => {
 
 let flower2 = null;
 let flower2Loaded = false;
+
+let cutSceneNo = false;
 
 loadFlower(scene, (loadedFlower) => {
   flower2 = loadedFlower;
@@ -137,8 +157,8 @@ function createDialogueUI() {
   const texture = new THREE.CanvasTexture(canvas);
   const mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
 
-  dialogueBox = new THREE.Sprite(mat); // ← THIS is what you forgot
-dialogueBox.scale.set(window.innerWidth * 0.6, 140, 1);
+  dialogueBox = new THREE.Sprite(mat);
+  dialogueBox.scale.set(window.innerWidth * 0.6, 140, 1);
 
   // Center bottom of screen in orthographic space
   dialogueBox.position.set(0, -window.innerHeight / 2 + 100, 0);
@@ -260,7 +280,8 @@ function handleChoice(answer) {
     let flower2NewPos = sphere2.position.clone().add(new THREE.Vector3(0, 1.5, 0));
     flower2.position.set(flower2NewPos.x, flower2NewPos.y, flower2NewPos.z);
   } else {
-    window.close(); // :(
+    // Trigger Za Warudo!
+    cutSceneNo = true;
   }
 }
 
@@ -292,7 +313,7 @@ canvas.width = 256;
 canvas.height = 256;
 const ctx = canvas.getContext("2d");
 
-let placementMode = false; //change in prod
+let placementMode = true; //change in prod
 const tempObstacles = [];
 //setup for temporary obstacles
 
@@ -362,7 +383,7 @@ socket.on("newPlayer", (data) => {
     const mesh = createOtherPlayer(data.id);
     mesh.position.set(data.x, data.y, data.z);
   }
-});
+}); 
 
 // Player movement
 socket.on("playerMoved", (data) => {
@@ -674,32 +695,84 @@ let cutSceneAlreadyTrigged = false;
 let cutSceneStartTime = 0;
 let flowerSpawnedCutscene = false;
 
-let sphere2 = null; // Declare sphere2 in a scope accessible to both startCutScene and animate
+initZaWarudo(renderer, scene, camera);
 
-function startcutScene() {
+let sphere2 = null; // Declare sphere2 in a scope accessible to both startCutScene and animate
+let zaWarudoStand = null; // For the "NO" choice time stop scene
+
+
+
+
+function startCutScene() {
   holdingFlowers = true;
   camera.position.set(0, 104, 5);
   camera.lookAt(0, 100, 0);
 
-  sphere.position.set(-2, 101, 0); // example y=0.5, z=0
+  sphere.position.set(-2, 101, 0);
   scene.add(sphere);
 
   const sphereGeo2 = new THREE.SphereGeometry(0.5, 16, 16);
   const sphereMat2 = new THREE.MeshLambertMaterial({ color: COLOR.pink });
   sphere2 = new THREE.Mesh(sphereGeo2, sphereMat2);
-  sphere2.position.set(1, sphere.position.y, sphere.position.z); // same y,z
+  sphere2.position.set(1, sphere.position.y, sphere.position.z);
   scene.add(sphere2);
 
   sphere.lookAt(sphere2.position);
-  sphere.rotateOnAxis(new THREE.Vector3(0, 1, 0), (3 * Math.PI) / 2); // make them face each other
+  sphere.rotateOnAxis(new THREE.Vector3(0, 1, 0), (3 * Math.PI) / 2);
   sphere2.lookAt(sphere.position);
   cutScenePlaying = true;
   cutSceneStartTime = performance.now();
 }
+
+const clock = new THREE.Clock();
+
 //y has different bc of the constant change due to the force applied by gravity
 function animate() {
+  const delta = clock.getDelta(); // make sure you have a THREE.Clock()
+  updateZaWarudo(delta);
+
+  let now = performance.now();
+  
+  // Handle time stop effect
+
+  // Handle "NO" choice - Za Warudo scene
+  if (cutSceneNo) {
+    dialogueBox.visible = false;
+    
+    // Create the stand only once
+    if (!zaWarudoStand) {
+      zaWarudoStand = sphere.clone();
+      zaWarudoStand.position.set(0, 102, 1);
+      zaWarudoStand.material = new THREE.MeshBasicMaterial({ color: COLOR.yellow });
+      sphere.material = new THREE.MeshBasicMaterial({ color: COLOR.red });
+      scene.add(zaWarudoStand);
+      
+      //document.removeChild(document.getElementById('audio'));
+      // Play audio - syncs with visual effect
+      stopPlaylist(); // Stop background music
+      const audio = new Audio("music/za-warudo-dios-the-world.mp3");
+      audio.play();
+      
+      // Trigger time stop with dramatic shockwave
+      
+      activateZaWarudo();//zaWarudo();
+    }
+
+    // Render the frozen world
+   renderer.autoClear = false;
+renderer.clear();
+
+renderZaWarudo(); // renders 3D scene through shader
+
+renderer.clearDepth();
+renderer.render(uiScene, uiCamera);
+
+    return;
+  }
+
+  // Handle cutscene
   if (cutScenePlaying) {
-    cutSceneAlreadyTrigged = true; // ensure cutscene doesn't retrigger
+    cutSceneAlreadyTrigged = true;
     let elapsed = performance.now() - cutSceneStartTime;
 
     if (elapsed < 1000) {
@@ -712,8 +785,8 @@ function animate() {
         flowerSpawnedCutscene = true;
       }
     } else if (!postCutSceneState) {
-      if (!dialogueBox) createDialogueUI(); // safety
-      if (!dialogueBox.visible) dialogueBox.visible = true; // safety
+      if (!dialogueBox) createDialogueUI();
+      if (!dialogueBox.visible) dialogueBox.visible = true;
       if (!typing && !choiceActive) {
         startDialogue(
           "Will you be my Valentine? :3 (Click YES or NO (preferably yes :3))",
@@ -721,37 +794,34 @@ function animate() {
       }
     }
 
-    updateDialogue(true); // ← THIS WAS MISSING
+    updateDialogue();
 
     renderer.autoClear = false;
     renderer.clear();
     renderer.render(scene, camera);
+    renderer.clearDepth();
     renderer.render(uiScene, uiCamera);
     return;
   }
+
   if (postCutSceneState) {
     cutScenePlaying = false;
-    updateDialogue(false); 
-
-    
+    updateDialogue();
   }
 
   const currentTime = performance.now();
-  const deltaTime = Math.max(2, currentTime - lastFrameTime); //max deltatime bc out of focus
-  moveSpeedAdjusted = moveSpeed * (deltaTime / 16.67); //calc for calculating lag
+  const deltaTime = Math.max(2, currentTime - lastFrameTime);
+  moveSpeedAdjusted = moveSpeed * (deltaTime / 16.67);
   lastFrameTime = currentTime;
 
-  //updateSky();
-  // Update dataView only every 10 frames
   frameCount++;
   if (frameCount % 10 === 0) {
     updateDataView();
   }
 
   if (placementMode) {
-    //alow obstacle placement by the user.
-    //fix bug where a trillion cubes spawn
     renderer.render(scene, camera);
+
     if (tempObstacles.length > 0) {
       for (let tempCube of tempObstacles) {
         scene.remove(tempCube);
@@ -760,11 +830,10 @@ function animate() {
     let obstaclePos = new THREE.Vector3();
     obstaclePos.copy(camera.position);
     obstaclePos.addScaledVector(camera.getWorldDirection(tempVec), 5);
-    obstaclePos.y = sphere.position.y - 1; //place at player height
+    obstaclePos.y = sphere.position.y - 1;
     obstaclePos.x = sphere.position.x;
     obstaclePos.z = sphere.position.z;
     let cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
-    //since this doesnt place permatnely and is simply for reference, the actual scale can be adjusted
     let cubeMaterial = new THREE.MeshBasicMaterial({
       color: 0x00ff00,
       opacity: 0.5,
@@ -775,7 +844,6 @@ function animate() {
     scene.add(tempCube);
     tempObstacles.push(tempCube);
     if (keys["Enter"] && frameCount % 10 === 0) {
-      //create the obstalce in the scene for the session, after page reload will automatically disappear
       const obstacleGeometry = new THREE.BoxGeometry(1, 1, 1);
       const obstacleMaterial = new THREE.MeshBasicMaterial({
         color: COLOR.purple,
@@ -797,19 +865,16 @@ function animate() {
         COLOR.purple,
       ]);
       console.log("Obstacle placed at", obstaclePos);
-      console.log("Obstacles", obstacleDict); //this line crashes the game? weird
     }
   }
 
   if (frameCount % 5 == 1) {
     bubblePositions.forEach((pos) => {
       pos.y += 0.03;
-      //pos.x += Math.sin(currentTime * 0.001 + pos.z) * 0.0001; // add some horizontal movement
-      //pos.z += Math.cos(currentTime * 0.001 + pos.x) * 0.0001; // add some depth movement
-      pos.y = ((pos.y + 10) % 50) - 10; // reset to bottom after reaching top
+      pos.y = ((pos.y + 10) % 50) - 10;
     });
   }
-  // Update cached trig values only if angles changed
+
   if (lastCameraAngleH !== cameraAngleH) {
     cachedSinH = Math.sin(cameraAngleH);
     cachedCosH = Math.cos(cameraAngleH);
@@ -821,30 +886,24 @@ function animate() {
     lastCameraAngleV = cameraAngleV;
   }
 
-  // backward (s arrowdown)
   if (keys["ArrowDown"] || keys["s"]) {
     velocityZ = Math.min(velocityZ + AccelerationZ, moveSpeedAdjusted);
   } else if (velocityZ > 0) {
     velocityZ = Math.max(velocityZ - 0.8 * AccelerationZ, 0);
   }
 
-  // forward (arrowup w)
   if (keys["ArrowUp"] || keys["w"]) {
     velocityZ = Math.max(velocityZ - AccelerationZ, -moveSpeedAdjusted);
   } else if (velocityZ < 0) {
     velocityZ = Math.min(velocityZ + 0.8 * AccelerationZ, 0);
   }
 
-  //these are in reverse order bc the keys were in reverse order and its easier to just swap the conditions
-
-  // Left movement (A or ArrowLeft)
   if (keys["ArrowLeft"] || keys["a"]) {
     velocityX = Math.max(velocityX - AccelerationX, -moveSpeedAdjusted);
   } else if (velocityX < 0) {
     velocityX = Math.min(velocityX + 0.8 * AccelerationX, 0);
   }
 
-  // Right movement (D or ArrowRight)
   if (keys["ArrowRight"] || keys["d"]) {
     velocityX = Math.min(velocityX + AccelerationX, moveSpeedAdjusted);
   } else if (velocityX > 0) {
@@ -854,9 +913,8 @@ function animate() {
   if (frameCount % 2 == 0) {
     sphere.rotateOnAxis(tempVec.set(1, 0, 0), -5 * velocityX);
     sphere.rotateOnAxis(tempVec.set(0, 0, 1), -5 * velocityZ);
-  } //ykw even i dont know... framecount is always an integer `~`
-  // move the roll outside the key checks to account for accel and deaccel
-  // Apply velocities to position (transform to world space based on camera angle)
+  }
+
   sphere.position.z += velocityZ * cachedCosH - velocityX * cachedSinH;
   sphere.position.x += velocityZ * cachedSinH + velocityX * cachedCosH;
 
@@ -864,9 +922,8 @@ function animate() {
   sphere.rotateOnAxis(tempVec.set(0, 0, 1), yRotation);
 
   sphere.position.y += VelocityY;
-  VelocityY -= (AccelerationY * deltaTime) / 16.67; // apply gravity in respect to frame rate
+  VelocityY -= (AccelerationY * deltaTime) / 16.67;
 
-  // fix: send position updates more frequently but throttled
   if (frameCount % 2 === 0) {
     socket.emit("updatePosition", {
       x: sphere.position.x,
@@ -875,7 +932,6 @@ function animate() {
     });
   }
 
-  // Check for flower collision only if flower is loaded, also allow stealing
   if (
     flowerLoaded &&
     (!playerHoldingFlower || playerHoldingFlower === socket.id)
@@ -886,24 +942,21 @@ function animate() {
       flowerLoaded,
       scene,
       playerHoldingFlower,
-    ); // 0.8 is an approximate radius for the flower model
+    );
     if (collision && collision.length > 0) {
       console.log("Flower picked up!");
-      playerHoldingFlower = socket.id; // set it immediately locally
+      playerHoldingFlower = socket.id;
       socket.emit("flowerPickedUp", { id: socket.id });
     }
   }
 
-  //  only check obstacles within reasonable distance
-  const checkRadius = 8; //8 unit is reasonable just dont make spheres with r > 8 and cubes with length > 16
+  const checkRadius = 8;
   for (let obstacle of obstacles) {
-    // quick distance check before expensive collision detection
     const dx = sphere.position.x - obstacle.mesh.position.x;
     const dy = sphere.position.y - obstacle.mesh.position.y;
     const dz = sphere.position.z - obstacle.mesh.position.z;
     const distSquared = dx * dx + dy * dy + dz * dz;
 
-    // Skip if too far away
     if (distSquared > checkRadius * checkRadius) continue;
 
     const pushOut = checkSphereBoxCollision(
@@ -915,16 +968,14 @@ function animate() {
 
     if (pushOut) {
       sphere.position.add(pushOut);
-      //console.log('Collision detected, pushing sphere out by', pushOut);
 
-      // If collision is mainly vertical (hittin top or bottom), reset velocity
       if (
         Math.abs(pushOut.y) > Math.abs(pushOut.x) &&
         Math.abs(pushOut.y) > Math.abs(pushOut.z)
       ) {
         VelocityY = 0;
         if (pushOut.y > 0) {
-          jumpResolved = true; // can jump again if landed on top
+          jumpResolved = true;
         }
       }
     }
@@ -936,7 +987,6 @@ function animate() {
     jumpResolved = true;
   }
 
-  // trig - use cached values
   cameraOffset.set(
     cameraDistance * cachedSinV * cachedSinH,
     cameraDistance * cachedCosV,
@@ -964,20 +1014,17 @@ function animate() {
     setInterval(() => {
       respawnSprite.material.opacity -= 0.01;
       if (respawnSprite.material.opacity <= 0) {
-        //console.log(' i should clear the interval :3');
         clearInterval();
       }
     }, 20);
     if (spawnIndex === finalSpawnIdx && !cutSceneAlreadyTrigged) {
-      startcutScene();
+      startCutScene();
       cutScenePlaying = true;
     }
   }
 
-  // Update flower position - FIXED LOGIC
   if (flowerLoaded && flower) {
     if (playerHoldingFlower === socket.id) {
-      // Current player is holding the flower
       flower.position.set(
         sphere.position.x,
         sphere.position.y + 1.2,
@@ -987,7 +1034,6 @@ function animate() {
       flower.rotation.y += 0.03;
       flower.position.y += Math.sin(performance.now() * 0.003) * 0.02;
     } else if (playerHoldingFlower && otherPlayers[playerHoldingFlower]) {
-      // Another player is holding the flower
       const otherPlayer = otherPlayers[playerHoldingFlower];
       flower.position.set(
         otherPlayer.position.x,
@@ -998,15 +1044,15 @@ function animate() {
       flower.rotation.y += 0.03;
       flower.position.y += Math.sin(performance.now() * 0.003) * 0.02;
     } else if (!playerHoldingFlower) {
-      // No one is holding the flower - keep it at its spawn location
       flower.visible = true;
     }
   }
 
   renderer.autoClear = false;
   renderer.clear();
-  renderer.render(scene, camera); // 3D world
-  renderer.render(uiScene, uiCamera); // UI on top
+renderer.render(scene, camera);
+renderer.clearDepth();
+  renderer.render(uiScene, uiCamera);
 }
 
 renderer.setAnimationLoop(animate);
