@@ -141,7 +141,8 @@ function createButton(label, xOffset) {
 
   btn.userData = { canvas, ctx, texture, label };
   btn.visible = false;
-
+  //set btn z index to be above dialogue box
+  btn.renderOrder = 1;
   uiScene.add(btn);
   return btn;
 }
