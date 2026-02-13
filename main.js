@@ -171,6 +171,10 @@ function createDialogueUI() {
 }
 
 noButton = createButton("NO", 120);
+window.tp = (x, y, z) => {
+  sphere.position.set(x, y, z);
+  console.log("Teleported to:", sphere.position);
+};
 
 createDialogueUI();
 
