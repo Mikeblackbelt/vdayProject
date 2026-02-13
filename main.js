@@ -756,7 +756,7 @@ function animate() {
       //document.removeChild(document.getElementById('audio'));
       // Play audio - syncs with visual effect
       stopPlaylist(); // Stop background music
-      const audio = new Audio("music/za-warudo-dios-the-world.mp3");
+      const audio = new Audio("https://github.com/Mikeblackbelt/vdayProject/blob/main/audio/za%20warudo.mp3?raw=true");
       audio.play();
       
       // Trigger time stop with dramatic shockwave
