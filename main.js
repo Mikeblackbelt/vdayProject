@@ -735,9 +735,16 @@ let zaWarudoAudio = new Audio(
 );
 
 // Unlock audio on first click
-window.addEventListener("click", () => {
-  zaWarudoAudio.load();
+window.addEventListener("click", async () => {
+  try {
+    await zaWarudoAudio.play();
+    zaWarudoAudio.pause();
+    zaWarudoAudio.currentTime = 0;
+  } catch (e) {
+    console.log("Unlock failed", e);
+  }
 }, { once: true });
+
 
 const clock = new THREE.Clock();
 
