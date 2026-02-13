@@ -731,7 +731,7 @@ function startCutScene() {
 }
 
 let zaWarudoAudio = new Audio(
-  "public/zaWarudo.mp3"
+  "/zaWarudo.mp3"
 );
 
 // Unlock audio on first click
