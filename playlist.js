@@ -12,7 +12,7 @@ function playNext() {
     if (!playing) return;
     const randomIndex = Math.floor(Math.random() * audioSources.length);
     currentAudio.src = audioSources[randomIndex];
-    currentAudio.defaultPlaybackRate = 1e-7;
+    currentAudio.defaultPlaybackRate = 0.07;
     currentAudio.play();
     currentAudio.onended = () => {
         if (playing) playNext(); // Only continue if still playing
