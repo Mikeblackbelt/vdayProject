@@ -40,13 +40,14 @@ const otherPlayers = {};
 let playerHoldingFlower = null;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xffb3d9); // Pink background
+// Deeper void — almost no color, just the suggestion of blood
+scene.background = new THREE.Color(0x0a0000);
 
 const renderer = new THREE.WebGLRenderer({
   antialias: false,
   powerPreference: "high-performance",
 });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limit pixel ratio for performance
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 const camera = new THREE.PerspectiveCamera(
   75,
   window.innerWidth / window.innerHeight,
@@ -54,8 +55,6 @@ const camera = new THREE.PerspectiveCamera(
   1000,
 );
 const loader = new GLTFLoader();
-
-
 
 let modelDict = [];
 let flower = null;
@@ -78,10 +77,11 @@ const respawnSprite = new THREE.Sprite(
       "https://raw.githubusercontent.com/Mikeblackbelt/vdayProject/main/image/logo%20-%20Spawn%20Point%20Set.png",
     ),
     transparent: true,
+    color: 0x990000,
   }),
 );
 respawnSprite.position.set(0, window.innerHeight / 2 - 100, 0);
-respawnSprite.scale.set(200, 100, 1); // pixels now
+respawnSprite.scale.set(200, 100, 1);
 respawnSprite.material.opacity = 0;
 uiScene.add(respawnSprite);
 
@@ -90,8 +90,6 @@ loadFlower(scene, (loadedFlower) => {
   flowerLoaded = true;
   modelDict.push(flower);
   console.log("Flower loaded successfully:", flower);
-  console.log("Flower position:", flower.position);
-  console.log("Flower in modelDict:", modelDict);
 });
 
 let flower2 = null;
@@ -103,8 +101,8 @@ loadFlower(scene, (loadedFlower) => {
   flower2 = loadedFlower;
   flower2Loaded = true;
   modelDict.push(flower2);
-  flower2.position.set(1, 100, 0); //initial position, will be changed in cutscene
-  flower2.visible = false; //hide until cutscene
+  flower2.position.set(1, 100, 0);
+  flower2.visible = false;
 });
 
 let dialogueBox = null;
@@ -112,12 +110,16 @@ let dialogueBox = null;
 let fullText = "";
 let currentText = "";
 let charIndex = 0;
-let typingSpeed = 25; // ms per character
+let typingSpeed = 38; // slower, more deliberate, more uncomfortable
 let lastTypeTime = 0;
 let typing = false;
 
 let choiceActive = false;
 let yesButton, noButton;
+
+// Subtle text corruption for psychological unease
+const glitchWords = ["hate", "HATE", "proceed", "this", "was", "coming", "stay", "with", "me"];
+let lastGlitchTime = 0;
 
 function createButton(label, xOffset) {
   const canvas = document.createElement("canvas");
@@ -129,26 +131,17 @@ function createButton(label, xOffset) {
   const mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
   const btn = new THREE.Sprite(mat);
 
-  // REAL pixel sizing
   btn.scale.set(200, 60, 1);
-
-  // Position relative to screen center
-  btn.position.set(
-    xOffset,
-    -window.innerHeight / 2 + 40,
-    0
-  );
-
+  btn.position.set(xOffset, -window.innerHeight / 2 + 40, 0);
   btn.userData = { canvas, ctx, texture, label };
   btn.visible = false;
-  //set btn z index to be above dialogue box
   btn.renderOrder = 1;
   uiScene.add(btn);
   return btn;
 }
 
+yesButton = createButton("Stay", -120);
 
-yesButton = createButton("YES", -120);
 function createDialogueUI() {
   const canvas = document.createElement("canvas");
   canvas.width = 512;
@@ -160,17 +153,14 @@ function createDialogueUI() {
 
   dialogueBox = new THREE.Sprite(mat);
   dialogueBox.scale.set(window.innerWidth * 0.6, 140, 1);
-
-  // Center bottom of screen in orthographic space
   dialogueBox.position.set(0, -window.innerHeight / 2 + 100, 0);
-
   dialogueBox.userData = { canvas, ctx, texture };
   dialogueBox.visible = false;
-
   uiScene.add(dialogueBox);
 }
 
-noButton = createButton("NO", 120);
+noButton = createButton(".....................................................................", 120);
+
 window.tp = (x, y, z) => {
   sphere.position.set(x, y, z);
   console.log("Teleported to:", sphere.position);
@@ -178,17 +168,16 @@ window.tp = (x, y, z) => {
 
 createDialogueUI();
 
-let show = true
+let show = true;
+
 function startDialogue(text) {
   fullText = text;
   currentText = "";
   charIndex = 0;
   typing = true;
   choiceActive = false;
-
   yesButton.visible = false;
   noButton.visible = false;
-
   dialogueBox.visible = true;
 }
 
@@ -197,15 +186,19 @@ function updateDialogue() {
 
   let now = performance.now();
   if (now - lastTypeTime > typingSpeed) {
-    currentText += fullText[charIndex];
-    charIndex++;
+    // Occasional single-character glitch for uncanny effect
+    if (Math.random() < 0.04 && charIndex > 3) {
+      currentText += glitchWords[Math.floor(Math.random() * glitchWords.length)][0];
+    } else {
+      currentText += fullText[charIndex];
+      charIndex++;
+    }
     lastTypeTime = now;
-
     drawDialogue(currentText);
 
     if (charIndex >= fullText.length) {
       typing = false;
-      if (show) {showChoices();} // text finished
+      if (show) showChoices();
     }
   }
 }
@@ -214,23 +207,25 @@ function drawDialogue(text) {
   const { canvas, ctx, texture } = dialogueBox.userData;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "rgba(0,0,0,0.75)";
+  // Almost black, with a faint red pulse
+  ctx.fillStyle = "rgba(8,0,0,0.92)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = "#4a0000";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
 
-  ctx.fillStyle = "white";
-  ctx.font = "28px Arial";
+  ctx.fillStyle = "#cc2222";
+  ctx.font = "26px Georgia"; // slightly more formal / unsettling than Arial
   ctx.textAlign = "center";
 
-  wrapText(ctx, text, canvas.width / 2, 50, 460, 32);
-
+  wrapText(ctx, text, canvas.width / 2, 48, 460, 30);
   texture.needsUpdate = true;
 }
 
 function showChoices() {
   choiceActive = true;
-  drawButton(yesButton, "#2ecc71");
-  drawButton(noButton, "#e74c3c");
-
+  drawButton(yesButton, "#3a0000");
+  drawButton(noButton, "#1a0000");
   yesButton.visible = true;
   noButton.visible = true;
 }
@@ -241,12 +236,14 @@ function drawButton(btn, color) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = color;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = "#660000";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
 
-  ctx.fillStyle = "white";
-  ctx.font = "32px Arial";
+  ctx.fillStyle = "#aa2222";
+  ctx.font = "28px Georgia";
   ctx.textAlign = "center";
   ctx.fillText(label, canvas.width / 2, 42);
-
   texture.needsUpdate = true;
 }
 
@@ -262,12 +259,10 @@ function onClick(event) {
 
   const raycaster = new THREE.Raycaster();
   raycaster.setFromCamera(mouse, uiCamera);
-
   const intersects = raycaster.intersectObjects([yesButton, noButton]);
 
   if (intersects.length > 0) {
     const btn = intersects[0].object;
-
     if (btn === yesButton) handleChoice(true);
     if (btn === noButton) handleChoice(false);
   }
@@ -278,15 +273,16 @@ function handleChoice(answer) {
   choiceActive = false;
   yesButton.visible = false;
   noButton.visible = false;
-  postCutSceneState = true; // trigger cutscene state change
+  postCutSceneState = true;
 
   if (answer) {
-    startDialogue("yipppe :D");
+    // Even "yes" feels wrong — too eager, too final
+    startDialogue("Proceed?");
     let flower2NewPos = sphere2.position.clone().add(new THREE.Vector3(0, 1.5, 0));
     flower2.position.set(flower2NewPos.x, flower2NewPos.y, flower2NewPos.z);
-    sphere.position.set(sphere.position.x + 0.7, sphere.position.y, sphere.position.z); 
+    sphere.position.set(sphere.position.x + 0.7, sphere.position.y, sphere.position.z);
   } else {
-    // Trigger Za Warudo!
+    // The real psychological turn
     cutSceneNo = true;
   }
 }
@@ -294,11 +290,9 @@ function handleChoice(answer) {
 function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
   const words = text.split(" ");
   let line = "";
-
   for (let n = 0; n < words.length; n++) {
     const testLine = line + words[n] + " ";
     const metrics = ctx.measureText(testLine);
-
     if (metrics.width > maxWidth && n > 0) {
       ctx.fillText(line, x, y);
       line = words[n] + " ";
@@ -313,41 +307,60 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// Create a canvas to draw the face
+// ─── Player face: uncanny, not cartoon-evil ───────────────────────────────
 const canvas = document.createElement("canvas");
 canvas.width = 256;
 canvas.height = 256;
 const ctx = canvas.getContext("2d");
 
-let placementMode = false; //change in prod
+let placementMode = false;
 const tempObstacles = [];
-//setup for temporary obstacles
 
-// Fill with blue background
-ctx.fillStyle = "#4a90e2";
+// Near-black base
+ctx.fillStyle = "#120000";
 ctx.fillRect(0, 0, 256, 256);
 
-// Draw eyes
-ctx.fillStyle = "#ff09daff";
+// Eyes that are too wide, too still
+ctx.fillStyle = "#220000";
 ctx.beginPath();
-ctx.arc(80, 80, 15, 0, Math.PI * 2);
+ctx.ellipse(80, 90, 22, 18, 0, 0, Math.PI * 2);
 ctx.fill();
 ctx.beginPath();
-ctx.arc(176, 80, 15, 0, Math.PI * 2);
+ctx.ellipse(176, 90, 22, 18, 0, 0, Math.PI * 2);
 ctx.fill();
 
-// Draw smile (arc)
-ctx.strokeStyle = "#000000";
-ctx.lineWidth = 8;
+// Pupils slightly off-center (unsettling)
+ctx.fillStyle = "#ff1111";
 ctx.beginPath();
-ctx.arc(128, 128, 60, 0.2 * Math.PI, 0.8 * Math.PI);
+ctx.arc(78, 92, 7, 0, Math.PI * 2);
+ctx.fill();
+ctx.beginPath();
+ctx.arc(178, 88, 7, 0, Math.PI * 2);
+ctx.fill();
+
+// Thin, almost human mouth that is too wide
+ctx.strokeStyle = "#440000";
+ctx.lineWidth = 3;
+ctx.beginPath();
+ctx.moveTo(70, 165);
+ctx.quadraticCurveTo(128, 195, 186, 165);
 ctx.stroke();
 
-//  texture from canvas
+// Faint suggestion of too many teeth
+ctx.fillStyle = "#1a0000";
+for (let i = 0; i < 7; i++) {
+  const tx = 85 + i * 14;
+  ctx.beginPath();
+  ctx.moveTo(tx, 168);
+  ctx.lineTo(tx + 4, 182);
+  ctx.lineTo(tx - 4, 182);
+  ctx.closePath();
+  ctx.fill();
+}
+
 const texture = new THREE.CanvasTexture(canvas);
 
-// gameing chafacter- reduce segments for better performance
-const geometry = new THREE.SphereGeometry(0.5, 16, 16); // Reduced from 32,32 to 16,16
+const geometry = new THREE.SphereGeometry(0.5, 16, 16);
 const material = new THREE.MeshBasicMaterial({ map: texture });
 const sphere = new THREE.Mesh(geometry, material);
 sphere.position.y = 0.5;
@@ -357,50 +370,42 @@ makeDeco(scene);
 
 function createOtherPlayer(id) {
   const geo = new THREE.SphereGeometry(0.5, 16, 16);
-  const mat = new THREE.MeshBasicMaterial({ color: Math.random() * 0xffffff });
+  // Other players are desaturated, almost drained of color
+  const mat = new THREE.MeshBasicMaterial({ color: 0x331111 });
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.y = 0.5; // FIX: Set initial Y position
+  mesh.position.y = 0.5;
   scene.add(mesh);
   otherPlayers[id] = mesh;
-  console.log("Created other player:", id, "at position:", mesh.position);
   return mesh;
 }
 
 console.info(
   "If render is not connected, render might be behind the latest github commit. If you are a developer, try pulling the latest code and restarting the server. If you are a player, inform the developers :3",
 );
-// Current players
+
 socket.on("currentPlayers", (players) => {
-  console.log("currentPlayers event received:", players);
   for (let id in players) {
     if (id !== socket.id) {
       const mesh = createOtherPlayer(id);
       mesh.position.set(players[id].x, players[id].y, players[id].z);
-      console.log("Set existing player position:", id, players[id]);
     }
   }
 });
 
-// New player joins
 socket.on("newPlayer", (data) => {
-  console.log("newPlayer event received:", data);
   if (data.id !== socket.id) {
-    // FIX: Don't create self
     const mesh = createOtherPlayer(data.id);
     mesh.position.set(data.x, data.y, data.z);
   }
-}); 
+});
 
-// Player movement
 socket.on("playerMoved", (data) => {
   if (otherPlayers[data.id]) {
     otherPlayers[data.id].position.set(data.x, data.y, data.z);
   }
 });
 
-// Player disconnects
 socket.on("playerDisconnected", (id) => {
-  console.log("Player disconnected:", id);
   if (otherPlayers[id]) {
     scene.remove(otherPlayers[id]);
     delete otherPlayers[id];
@@ -408,20 +413,11 @@ socket.on("playerDisconnected", (id) => {
 });
 
 socket.on("flowerPickedUp", (data) => {
-  console.log("____PICKUP_____");
-  console.log(" ID who picked up:", data.id);
-  console.log("socket ID:", socket.id);
-  console.log("Is it me?", data.id === socket.id);
-  console.log("Other players:", Object.keys(otherPlayers));
-
   playerHoldingFlower = data.id;
-  console.log("Set playerHoldingFlower to:", playerHoldingFlower);
 });
 
 socket.on("flowerDropped", () => {
-  console.log("=== FLOWER DROPPED EVENT ===");
   playerHoldingFlower = null;
-  console.log("Flower dropped/reset");
 });
 
 function playerCollisionCheck() {
@@ -434,21 +430,18 @@ function playerCollisionCheck() {
         new THREE.Vector3(0.5, 0.5, 0.5),
       )
     ) {
-      console.log("Collided with player", id);
       return id;
     }
   }
 }
 
-//start pos
 camera.position.set(5, 5, 5);
 camera.lookAt(0, 0, 0);
 
 let cameraDistance = 7;
-let cameraAngleH = Math.PI / 4; // horizontal angle (around Y axis) in radians
-let cameraAngleV = Math.PI / 4; // vertical angle (elevation) in radians
+let cameraAngleH = Math.PI / 4;
+let cameraAngleV = Math.PI / 4;
 
-// control
 let isDragging = false;
 let previousMouseX = 0;
 let previousMouseY = 0;
@@ -460,17 +453,17 @@ var jumpResolved = true;
 var VelocityY = 0;
 var velocityX = 0;
 var velocityZ = 0;
-var AccelerationY = 0.0098; //this represents downward acceleration due to gravity
-var AccelerationX = 0.006; //this represents time it takes to accelrate, deaccleration time is greater by a bit so ill multiply by a arbitary constant
-var AccelerationZ = 0.006; //see above ^_^
-const groundLevel = -999; //this is not an important variable :3
+var AccelerationY = 0.0098;
+var AccelerationX = 0.006;
+var AccelerationZ = 0.006;
+const groundLevel = -999;
 const sphereRadius = 0.5;
 
-let postCutSceneState = false; 
+let postCutSceneState = false;
 
 function jump() {
   if (jumpResolved) {
-    VelocityY = 0.2; // v_y =  v_i - at
+    VelocityY = 0.2;
     jumpResolved = false;
   }
 }
@@ -483,7 +476,6 @@ window.addEventListener("keyup", (e) => {
   keys[e.key] = false;
 });
 
-// camera drag ~_~
 window.addEventListener("mousedown", (e) => {
   isDragging = true;
   previousMouseX = e.clientX;
@@ -496,33 +488,29 @@ window.addEventListener("mouseup", () => {
 
 window.addEventListener("mousemove", (e) => {
   if (isDragging) {
-    const deltaX = e.clientX - previousMouseX; // change in x/y
+    const deltaX = e.clientX - previousMouseX;
     const deltaY = e.clientY - previousMouseY;
-
-    cameraAngleH -= deltaX * 0.005; // Horizontal rotation
-    cameraAngleV -= deltaY * 0.005; // Vertical rotation
-
-    // max angle is abt 180 degrees (looking straight down), min is 0 (looking straight up)
+    cameraAngleH -= deltaX * 0.005;
+    cameraAngleV -= deltaY * 0.005;
     cameraAngleV = Math.max(0.1, Math.min(Math.PI - 0.1, cameraAngleV));
-
     previousMouseX = e.clientX;
     previousMouseY = e.clientY;
   }
 });
 
-// Mouse wheel for zoom
 window.addEventListener("wheel", (e) => {
   cameraDistance += e.deltaY * 0.01;
-  cameraDistance = Math.max(2, Math.min(20, cameraDistance)); // d in [2,20]
+  cameraDistance = Math.max(2, Math.min(20, cameraDistance));
 });
-//scene.background = null;
 
 const skyColor = new THREE.Color();
 
 function makeMountain(x, z, height) {
   const geo = new THREE.ConeGeometry(5, height, 4);
   const mat = new THREE.MeshStandardMaterial({
-    color: 0xb57edc,
+    color: 0x0d0000,
+    emissive: 0x220000,
+    emissiveIntensity: 0.15,
     flatShading: true,
   });
   const m = new THREE.Mesh(geo, mat);
@@ -540,22 +528,23 @@ for (let pos of mountainPositions) {
   makeMountain(pos[0], pos[1], pos[2]);
 }
 
+// Bubbles now feel more like floating eyes / memories
 const bubbleMat = new THREE.MeshPhysicalMaterial({
-  color: 0xffffff,
-  emissive: 0xfbcaff,
-  emissiveIntensity: 0.6,
-  transmission: 1,
-  roughness: 0,
-  thickness: 0.5,
+  color: 0x1a0000,
+  emissive: 0x440000,
+  emissiveIntensity: 0.4,
+  transmission: 0.7,
+  roughness: 0.1,
+  thickness: 0.8,
 });
 
 const bubblePositions = [];
 
 for (let i = 0; i < 160; i++) {
   const bubbleGeo = new THREE.SphereGeometry(
-    Math.random() * 0.3 + 0.13,
-    16,
-    16,
+    Math.random() * 0.25 + 0.1,
+    12,
+    12,
   );
   const bubble = new THREE.Mesh(bubbleGeo, bubbleMat);
   bubble.position.set(
@@ -567,7 +556,6 @@ for (let i = 0; i < 160; i++) {
   scene.add(bubble);
 }
 
-//loop thru obstacles and add to scene, refer to line 13
 const obstacles = [];
 for (let obstacle of obstacleDict) {
   const obstacleGeometry = new THREE.BoxGeometry(
@@ -609,16 +597,16 @@ for (let obstacle of sphereObstacleDict) {
   });
 }
 
-// sphere-box collision detection
-
 const dataView = document.createElement("div");
 dataView.style.position = "absolute";
 dataView.style.top = "10px";
 dataView.style.left = "10px";
-dataView.style.color = "black";
-dataView.style.backgroundColor = "rgba(255, 255, 255, 0.7)";
+dataView.style.color = "#882222";
+dataView.style.backgroundColor = "rgba(5, 0, 0, 0.85)";
+dataView.style.border = "1px solid #330000";
 dataView.style.padding = "10px";
-dataView.style.fontFamily = "Arial, sans-serif";
+dataView.style.fontFamily = "Georgia, serif";
+dataView.style.fontSize = "13px";
 dataView.innerHTML = `<p>Use WASD or Arrow keys to move</p>
 <p>Space to jump</p>
 <p>Drag mouse to rotate camera</p>
@@ -626,19 +614,14 @@ dataView.innerHTML = `<p>Use WASD or Arrow keys to move</p>
 <p>Sphere Position: ${sphere.position.x.toFixed(2)}, ${sphere.position.y > 0.01 || sphere.position.y < -0.01 ? sphere.position.y.toFixed(2) : "0.00"}, ${sphere.position.z.toFixed(2)}</p>`;
 document.body.appendChild(dataView);
 
-//this is wordy but wtv. i will probably remove this once finished.
-
 let lastFrameTime = performance.now();
 let frameCount = 0;
 let moveSpeedAdjusted = moveSpeed;
 
-// reusable vectors to avoid creating new objects every frame
-//game wont lag :3
 const tempVec = new THREE.Vector3();
 const cameraOffset = new THREE.Vector3();
 const desiredCameraPos = new THREE.Vector3();
 
-// cache trigonometric values
 let cachedSinH = Math.sin(cameraAngleH);
 let cachedCosH = Math.cos(cameraAngleH);
 let cachedSinV = Math.sin(cameraAngleV);
@@ -648,11 +631,11 @@ let lastCameraAngleV = cameraAngleV;
 
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
+renderer.toneMappingExposure = 0.85; // darker overall
 
-let spawn = new THREE.Vector3(0, 0, 0); //spawn point,  dynamically change
-let finalSpawnIdx = spawnDict.length - 1; //play cutscne after hitting
-// Update dataView less frequently (every 10 frames)
+let spawn = new THREE.Vector3(0, 0, 0);
+let finalSpawnIdx = spawnDict.length - 1;
+
 function updateDataView() {
   dataView.innerHTML = `<p>Use WASD or Arrow keys to move</p>
 <p>Space to jump</p>
@@ -663,11 +646,11 @@ function updateDataView() {
 <p>Am I Connected to Server? ${socket.connected}</p>`;
 }
 
-const hemiLight = new THREE.HemisphereLight(0xffeeb1, 0x080820, 0.9);
+// Colder, more isolating light
+const hemiLight = new THREE.HemisphereLight(0x330000, 0x050000, 0.45);
 scene.add(hemiLight);
-//hemiLight.intensity = 0
 
-const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+const dirLight = new THREE.DirectionalLight(0x661111, 0.7);
 dirLight.position.set(5, 10, 7);
 dirLight.castShadow = true;
 scene.add(dirLight);
@@ -676,7 +659,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const groundGeo = new THREE.PlaneGeometry(200, 200);
-const groundMat = new THREE.MeshStandardMaterial({ color: 0xff4f44 });
+const groundMat = new THREE.MeshStandardMaterial({ color: 0x080000 });
 const ground = new THREE.Mesh(groundGeo, groundMat);
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
@@ -692,7 +675,8 @@ const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2), shadowMat);
 shadow.rotation.x = -Math.PI / 2;
 scene.add(shadow);
 
-scene.fog = new THREE.FogExp2(0xffb3d9, 0.031);
+// Fog feels closer, more personal
+scene.fog = new THREE.FogExp2(0x110000, 0.038);
 
 let lastSpawnSet = 0;
 let holdingFlowers = false;
@@ -703,11 +687,8 @@ let flowerSpawnedCutscene = false;
 
 initZaWarudo(renderer, scene, camera);
 
-let sphere2 = null; // Declare sphere2 in a scope accessible to both startCutScene and animate
-let zaWarudoStand = null; // For the "NO" choice time stop scene
-
-
-
+let sphere2 = null;
+let zaWarudoStand = null;
 
 function startCutScene() {
   holdingFlowers = true;
@@ -718,7 +699,8 @@ function startCutScene() {
   scene.add(sphere);
 
   const sphereGeo2 = new THREE.SphereGeometry(0.5, 16, 16);
-  const sphereMat2 = new THREE.MeshLambertMaterial({ color: COLOR.pink });
+  // The other sphere is the same red as the void — almost blending in
+  const sphereMat2 = new THREE.MeshLambertMaterial({ color: 0x220000 });
   sphere2 = new THREE.Mesh(sphereGeo2, sphereMat2);
   sphere2.position.set(1, sphere.position.y, sphere.position.z);
   scene.add(sphere2);
@@ -730,11 +712,8 @@ function startCutScene() {
   cutSceneStartTime = performance.now();
 }
 
-let zaWarudoAudio = new Audio(
-  "/za-warudo-dios-the-world.mp3"
-);
+let zaWarudoAudio = new Audio("/za-warudo-dios-the-world.mp3");
 
-// Unlock audio on first click
 window.addEventListener("click", async () => {
   try {
     await zaWarudoAudio.play();
@@ -745,53 +724,42 @@ window.addEventListener("click", async () => {
   }
 }, { once: true });
 
-
 const clock = new THREE.Clock();
 
-//y has different bc of the constant change due to the force applied by gravity
 function animate() {
-  const delta = clock.getDelta(); // make sure you have a THREE.Clock()
+  const delta = clock.getDelta();
   updateZaWarudo(delta);
 
   let now = performance.now();
-  
-  // Handle time stop effect
 
-  // Handle "NO" choice - Za Warudo scene
+  // ─── "NO" path: the world stops, but the feeling continues ───────────────
   if (cutSceneNo) {
     dialogueBox.visible = false;
-    
-    // Create the stand only once
+
     if (!zaWarudoStand) {
       zaWarudoStand = sphere.clone();
       zaWarudoStand.position.set(0, 102, 1);
-      zaWarudoStand.material = new THREE.MeshBasicMaterial({ color: COLOR.yellow });
-      sphere.material = new THREE.MeshBasicMaterial({ color: COLOR.red });
+      // Stand is pure black — absence
+      zaWarudoStand.material = new THREE.MeshBasicMaterial({ color: 0x000000 });
+      sphere.material = new THREE.MeshBasicMaterial({ color: 0x1a0000 });
       scene.add(zaWarudoStand);
-      
-      //document.removeChild(document.getElementById('audio'));
-      // Play audio - syncs with visual effect
-      stopPlaylist(); // Stop background music
-    zaWarudoAudio.play().catch(e => console.log("Audio failed:", e));
 
-      // Trigger time stop with dramatic shockwave
-      
-      activateZaWarudo();//zaWarudo();
+      stopPlaylist();
+      zaWarudoAudio.play().catch(e => console.log("Audio failed:", e));
+      activateZaWarudo();
     }
 
-    // Render the frozen world
-   renderer.autoClear = false;
-renderer.clear();
-
-renderZaWarudo(); // renders 3D scene through shader
-
-renderer.clearDepth();
-renderer.render(uiScene, uiCamera);
-
+    // Optional: after a long freeze, quietly rewrite the dialogue
+    // (can be expanded later with more text that appears while frozen)
+    renderer.autoClear = false;
+    renderer.clear();
+    renderZaWarudo();
+    renderer.clearDepth();
+    renderer.render(uiScene, uiCamera);
     return;
   }
 
-  // Handle cutscene
+  // ─── Cutscene ────────────────────────────────────────────────────────────
   if (cutScenePlaying) {
     cutSceneAlreadyTrigged = true;
     let elapsed = performance.now() - cutSceneStartTime;
@@ -810,7 +778,7 @@ renderer.render(uiScene, uiCamera);
       if (!dialogueBox.visible) dialogueBox.visible = true;
       if (!typing && !choiceActive) {
         startDialogue(
-          "Will you be my Valentine? :3 (Click YES or NO (preferably yes :3))",
+          "I HATE this game. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it. Hate it.",
         );
       }
     }
@@ -856,7 +824,7 @@ renderer.render(uiScene, uiCamera);
     obstaclePos.z = sphere.position.z;
     let cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
     let cubeMaterial = new THREE.MeshBasicMaterial({
-      color: 0x00ff00,
+      color: 0xff0000,
       opacity: 0.5,
       transparent: true,
     });
@@ -867,7 +835,7 @@ renderer.render(uiScene, uiCamera);
     if (keys["Enter"] && frameCount % 10 === 0) {
       const obstacleGeometry = new THREE.BoxGeometry(1, 1, 1);
       const obstacleMaterial = new THREE.MeshBasicMaterial({
-        color: COLOR.purple,
+        color: 0x8b0000,
       });
       const obstacleMesh = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
       obstacleMesh.position.copy(obstaclePos);
@@ -883,7 +851,7 @@ renderer.render(uiScene, uiCamera);
         1,
         1,
         1,
-        COLOR.purple,
+        0x8b0000,
       ]);
       console.log("Obstacle placed at", obstaclePos);
     }
@@ -891,7 +859,7 @@ renderer.render(uiScene, uiCamera);
 
   if (frameCount % 5 == 1) {
     bubblePositions.forEach((pos) => {
-      pos.y += 0.03;
+      pos.y += 0.02; // slower, more deliberate drift
       pos.y = ((pos.y + 10) % 50) - 10;
     });
   }
@@ -965,7 +933,6 @@ renderer.render(uiScene, uiCamera);
       playerHoldingFlower,
     );
     if (collision && collision.length > 0) {
-      console.log("Flower picked up!");
       playerHoldingFlower = socket.id;
       socket.emit("flowerPickedUp", { id: socket.id });
     }
@@ -989,7 +956,6 @@ renderer.render(uiScene, uiCamera);
 
     if (pushOut) {
       sphere.position.add(pushOut);
-
       if (
         Math.abs(pushOut.y) > Math.abs(pushOut.x) &&
         Math.abs(pushOut.y) > Math.abs(pushOut.z)
@@ -1030,7 +996,6 @@ renderer.render(uiScene, uiCamera);
     ).addScaledVector(new THREE.Vector3(0, 3, 0), sphereRadius + 0.1);
     spawn.set(spawnPoint.x, spawnPoint.y, spawnPoint.z);
     lastSpawnSet = spawnIndex;
-    console.log("Spawn point set to:", spawn);
     respawnSprite.material.opacity = 1;
     setInterval(() => {
       respawnSprite.material.opacity -= 0.01;
@@ -1052,8 +1017,8 @@ renderer.render(uiScene, uiCamera);
         sphere.position.z,
       );
       flower.visible = true;
-      flower.rotation.y += 0.03;
-      flower.position.y += Math.sin(performance.now() * 0.003) * 0.02;
+      flower.rotation.y += 0.02;
+      flower.position.y += Math.sin(performance.now() * 0.002) * 0.015;
     } else if (playerHoldingFlower && otherPlayers[playerHoldingFlower]) {
       const otherPlayer = otherPlayers[playerHoldingFlower];
       flower.position.set(
@@ -1062,8 +1027,8 @@ renderer.render(uiScene, uiCamera);
         otherPlayer.position.z,
       );
       flower.visible = true;
-      flower.rotation.y += 0.03;
-      flower.position.y += Math.sin(performance.now() * 0.003) * 0.02;
+      flower.rotation.y += 0.02;
+      flower.position.y += Math.sin(performance.now() * 0.002) * 0.015;
     } else if (!playerHoldingFlower) {
       flower.visible = true;
     }
@@ -1071,8 +1036,8 @@ renderer.render(uiScene, uiCamera);
 
   renderer.autoClear = false;
   renderer.clear();
-renderer.render(scene, camera);
-renderer.clearDepth();
+  renderer.render(scene, camera);
+  renderer.clearDepth();
   renderer.render(uiScene, uiCamera);
 }
 
